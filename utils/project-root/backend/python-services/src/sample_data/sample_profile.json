@@ -1,0 +1,9 @@
+{
+  "username": "sample_user",
+  "full_name": "Sample User",
+  "profile_pic_url": "",
+  "followers": 1234,
+  "followees": 321,
+  "posts_count": 2,
+  "biography": "Offline sample profile for testing"
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "shortcode": "SAMPLE1",
+    "caption": "Delicious food at the cafe #food",
+    "likes": 12,
+    "comments": 1,
+    "display_url": "",
+    "taken_at": "2024-01-01T10:00:00"
+  },
+  {
+    "shortcode": "SAMPLE2",
+    "caption": "A calm beach #travel",
+    "likes": 34,
+    "comments": 2,
+    "display_url": "",
+    "taken_at": "2024-01-02T11:00:00"
+  }
+]

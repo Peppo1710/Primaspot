@@ -1,0 +1,26 @@
+# API framework
+fastapi>=0.100.0
+
+# Pydantic v2 for Python 3.13 support (2.8+ supports Python 3.13)
+pydantic>=2.8.0
+
+# ASGI server
+uvicorn[standard]==0.22.0
+
+# Instaloader for scraping
+instaloader==4.9
+
+# MongoDB client
+pymongo==4.4.0
+
+# .env loader
+python-dotenv==1.0.0
+
+# OpenCV for image analysis (headless)
+opencv-python-headless==4.8.1.78
+
+# HTTP requests
+requests==2.31.0
+
+# Testing
+pytest==7.4.0
