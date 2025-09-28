@@ -6,6 +6,8 @@ export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchStatus, setSearchStatus] = useState(null); // 'success', 'error', or null
+  const [username, setUsername] = useState('');
   const navigate = useNavigate();
 
   // Enhanced mock dataset with more realistic data
@@ -61,29 +63,63 @@ export default function SearchPage() {
     e.preventDefault();
     if (!query.trim()) {
       setResults([]);
+      setSearchStatus(null);
       return;
     }
 
     setIsSearching(true);
+    setSearchStatus(null);
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    const q = query.toLowerCase();
-    const matched = mockData.filter(d => (
-      d.title.toLowerCase().includes(q) ||
-      d.tags.join(' ').toLowerCase().includes(q) ||
-      d.snippet.toLowerCase().includes(q) ||
-      d.type.toLowerCase().includes(q)
-    ));
+    try {
+      // Simulate API call - replace with actual backend call
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, username })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setResults(data.results || []);
+        setSearchStatus('success');
+        // Navigate to dashboard after successful search
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1500);
+      } else {
+        setResults([]);
+        setSearchStatus('error');
+      }
+    } catch (error) {
+      // Fallback to mock data for development
+      const q = query.toLowerCase();
+      const matched = mockData.filter(d => (
+        d.title.toLowerCase().includes(q) ||
+        d.tags.join(' ').toLowerCase().includes(q) ||
+        d.snippet.toLowerCase().includes(q) ||
+        d.type.toLowerCase().includes(q)
+      ));
+      
+      setResults(matched);
+      setSearchStatus(matched.length > 0 ? 'success' : 'error');
+      
+      // Navigate to dashboard if mock data has results
+      if (matched.length > 0) {
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1500);
+      }
+    }
     
-    setResults(matched);
     setIsSearching(false);
   };
 
   const handleClear = () => {
     setQuery('');
     setResults([]);
+    setSearchStatus(null);
   };
 
   const getTypeColor = (type) => {
@@ -115,23 +151,17 @@ export default function SearchPage() {
         <div className="nav-content">
           <div className="nav-brand" onClick={() => navigate('/')}>
             <div className="brand-logo">
-              <span className="brand-icon">P</span>
+              <img src="logo.png" alt="" />
             </div>
-            <span className="brand-text">PrimeSpot</span>
+            <span className="brand-text">PrimaSpot</span>
           </div>
           
           <div className="nav-links">
             <button 
               className="nav-link"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/about')}
             >
-              Analytics
-            </button>
-            <button 
-              className="nav-link"
-              onClick={() => navigate('/search')}
-            >
-              Search
+              About Developer
             </button>
           </div>
         </div>
@@ -162,8 +192,11 @@ export default function SearchPage() {
               <input
                 type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search posts, tags, metrics, or insights..."
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setUsername(e.target.value);
+                }}
+                placeholder="Enter Instagram username to search analytics..."
                 className="search-input"
                 disabled={isSearching}
               />
@@ -183,11 +216,18 @@ export default function SearchPage() {
               
               <button
                 type="submit"
-                className="search-button"
+                className={`search-button ${searchStatus === 'success' ? 'search-button-success' : ''}`}
                 disabled={isSearching || !query.trim()}
               >
                 {isSearching ? (
                   <div className="loading-spinner"></div>
+                ) : searchStatus === 'success' ? (
+                  <>
+                    <span>Go to Dashboard</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="m9 18 6-6-6-6"/>
+                    </svg>
+                  </>
                 ) : (
                   <>
                     <span>Search</span>
@@ -200,23 +240,44 @@ export default function SearchPage() {
             </div>
           </form>
 
-          {/* Quick Search Suggestions */}
-          {!query && (
-            <div className="quick-suggestions">
-              <p className="suggestions-label">Quick searches:</p>
-              <div className="suggestion-tags">
-                {['engagement', 'travel content', 'best posting time', 'hashtag performance', 'reel analytics'].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    className="suggestion-tag"
-                    onClick={() => setQuery(suggestion)}
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+          {/* Search Status Indicator - Positioned in visible area */}
+          {searchStatus && (
+            <div className="search-status">
+              {searchStatus === 'success' ? (
+                <div className="status-success">
+                  <div className="success-content">
+                    <div className="success-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M9 12l2 2 4-4"/>
+                        <circle cx="12" cy="12" r="10"/>
+                      </svg>
+                    </div>
+                    <div className="success-text">
+                      <h3>Search Successful!</h3>
+                      <p>Found {results.length} result{results.length !== 1 ? 's' : ''} for your query.</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="status-error">
+                  <div className="error-content">
+                    <div className="error-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="m15 9-6 6"/>
+                        <path d="m9 9 6 6"/>
+                      </svg>
+                    </div>
+                    <div className="error-text">
+                      <h3>No Results Found</h3>
+                      <p>We couldn't find anything matching your search. Try different keywords or check your spelling.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+
         </div>
       </main>
 
@@ -277,18 +338,6 @@ export default function SearchPage() {
         </section>
       )}
 
-      {/* No Results */}
-      {query && results.length === 0 && !isSearching && (
-        <section className="no-results">
-          <div className="no-results-content">
-            <div className="no-results-icon">🔍</div>
-            <h3 className="no-results-title">No results found</h3>
-            <p className="no-results-text">
-              Try searching for different keywords or check your spelling
-            </p>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

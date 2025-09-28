@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './App.css'
 import SearchPage from './pages/Searchpage'
-import Analytics from './pages/Analytics'
+import Dashboard from './pages/Dashboard'
 
 function App() {
 
@@ -11,9 +11,8 @@ function App() {
     <>
       <BrowserRouter>
         <Routes>
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/" element={<Analytics />} />
+          <Route path="/" element={<SearchPage />} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </BrowserRouter>
     </>
