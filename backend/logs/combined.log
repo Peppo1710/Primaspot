@@ -1787,3 +1787,7 @@
 {"context":"DatabaseService","level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSaved 8 reels for profile 68da71f608c3d41b01ecc7a3\u001b[39m","timestamp":"2025-09-29 17:18:08:188"}
 {"context":"DatabaseService","level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mUpdating scraping status for influencer 68da71f608c3d41b01ecc7a3 -> completed\u001b[39m","timestamp":"2025-09-29 17:18:08:188"}
 {"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSuccessfully scraped and stored data for d.taraxia_iiitn: 12 posts, 8 reels\u001b[39m","timestamp":"2025-09-29 17:18:08:188"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mValidating user: d.taraxia_iiitn\u001b[39m","timestamp":"2025-09-30 04:37:41:3741"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mUser d.taraxia_iiitn found in database\u001b[39m","timestamp":"2025-09-30 04:37:41:3741"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mValidating user: d.taraxia_iiitn\u001b[39m","timestamp":"2025-09-30 04:39:19:3919"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mUser d.taraxia_iiitn found in database\u001b[39m","timestamp":"2025-09-30 04:39:19:3919"}
