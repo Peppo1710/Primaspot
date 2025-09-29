@@ -71,46 +71,39 @@ export default function SearchPage() {
     setSearchStatus(null);
     
     try {
-      // Simulate API call - replace with actual backend call
-      const response = await fetch('/api/search', {
-        method: 'POST',
+      // Use the actual API endpoint
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${backendUrl}/api/user/validate/${query}`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query, username })
+        }
       });
       
       if (response.ok) {
         const data = await response.json();
-        setResults(data.results || []);
-        setSearchStatus('success');
-        // Navigate to dashboard after successful search
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1500);
+        if (data.success) {
+          setResults(mockData); // Use mock data for display
+          setSearchStatus('success');
+          // Navigate to dashboard after successful search
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 1500);
+        } else {
+          setResults([]);
+          setSearchStatus('error');
+        }
+      } else if (response.status === 404) {
+        setResults([]);
+        setSearchStatus('error');
       } else {
         setResults([]);
         setSearchStatus('error');
       }
     } catch (error) {
-      // Fallback to mock data for development
-      const q = query.toLowerCase();
-      const matched = mockData.filter(d => (
-        d.title.toLowerCase().includes(q) ||
-        d.tags.join(' ').toLowerCase().includes(q) ||
-        d.snippet.toLowerCase().includes(q) ||
-        d.type.toLowerCase().includes(q)
-      ));
-      
-      setResults(matched);
-      setSearchStatus(matched.length > 0 ? 'success' : 'error');
-      
-      // Navigate to dashboard if mock data has results
-      if (matched.length > 0) {
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1500);
-      }
+      console.error('API Error:', error);
+      setResults([]);
+      setSearchStatus('error');
     }
     
     setIsSearching(false);
@@ -122,27 +115,8 @@ export default function SearchPage() {
     setSearchStatus(null);
   };
 
-  const getTypeColor = (type) => {
-    const colors = {
-      performance: '#FF3CAC',
-      content: '#9D4EDD',
-      growth: '#00F5D4',
-      hashtags: '#FF8E3C',
-      audience: '#A7F432'
-    };
-    return colors[type] || '#B0B0B0';
-  };
 
-  const getTypeIcon = (type) => {
-    const icons = {
-      performance: '📈',
-      content: '🎨',
-      growth: '🚀',
-      hashtags: '#️⃣',
-      audience: '👥'
-    };
-    return icons[type] || '📊';
-  };
+ 
 
   return (
     <div className="search-container">

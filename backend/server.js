@@ -15,7 +15,7 @@ const dbConnection = require('./config/database');
 const userRoutes = require('./src/routes/userRoutes');
 
 const app = express();
-const port = process.env.PORT ;
+const port = process.env.PORT || 8000;
 
 // Security middleware
 app.use(helmet({
@@ -28,7 +28,16 @@ app.use(compression());
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:3001'],
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:5173', 
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:8000',
+    'http://localhost:8000'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -97,6 +106,7 @@ app.get('/api', (req, res) => {
     endpoints: {
       users: '/api/users',
       user: '/api/user/:username',
+      validate: '/api/user/validate/:username',
       health: '/health'
     }
   });
@@ -116,6 +126,7 @@ app.get('/api/docs', (req, res) => {
     message: 'API Documentation',
     endpoints: [
       { method: 'GET', path: '/user/:username', description: 'Get user profile data' },
+      { method: 'GET', path: '/user/validate/:username', description: 'Validate if username exists on Instagram and call central API' },
       { method: 'POST', path: '/user/:username/refresh', description: 'Force refresh user data' },
       { method: 'GET', path: '/user/:username/posts', description: 'Get user posts with pagination' },
       { method: 'GET', path: '/user/:username/analytics', description: 'Get user analytics data' },

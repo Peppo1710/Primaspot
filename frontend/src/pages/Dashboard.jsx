@@ -38,105 +38,176 @@ const Dashboard = () => {
 
   return (
     <div className="analytics-container">
-      {/* Navigation */}
-      <nav className="nav-bar">
-        <div className="nav-content">
-          <div className="nav-brand" onClick={() => navigate('/')}>
-            <div className="brand-logo">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 via-cyan-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/25">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles w-4 h-4 text-white">
-                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275Z"></path>
+      {/* Floating Action Button */}
+      <button 
+        className="floating-action-btn"
+        onClick={() => navigate('/')}
+        title="Back to Search"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12h18M3 6h18M3 18h18"/>
+        </svg>
+      </button>
+
+      {/* Hero Section */}
+      <div className="hero-section">
+        <div className="hero-content">
+          <div className="profile-showcase">
+            <div className="profile-photo">
+              <div className="photo-glow"></div>
+              <div className="photo-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
                 </svg>
               </div>
             </div>
-            <span className="brand-text">PrimeSpot</span>
+            <div className="profile-details">
+              <h1 className="profile-name">{profileData.username}</h1>
+              <p className="profile-bio">{profileData.name} • {profileData.bio}</p>
+              <div className="profile-stats">
+                <div className="stat-item">
+                  <span className="stat-number">{profileData.totalPosts}</span>
+                  <span className="stat-label">Posts</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-number">{profileData.totalFollowers}k</span>
+                  <span className="stat-label">Followers</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-number">{profileData.totalFollowing}</span>
+                  <span className="stat-label">Following</span>
+                </div>
+              </div>
+            </div>
           </div>
           
-          <div className="nav-links">
-            <button 
-              className="nav-link"
-              onClick={() => navigate('/dashboard')}
-            >
-              Dashboard
-            </button>
-            <button 
-              className="nav-link"
-              onClick={() => navigate('/')}
-            >
-              Search
-            </button>
+          <div className="kpi-showcase">
+            <div className="kpi-card">
+              <div className="kpi-icon likes">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"/>
+                </svg>
+              </div>
+              <div className="kpi-content">
+                <span className="kpi-value">{profileData.averageLikes}</span>
+                <span className="kpi-label">Avg Likes</span>
+                <span className="kpi-trend">↗ {profileData.growthRate}%</span>
+              </div>
+            </div>
+            
+            <div className="kpi-card">
+              <div className="kpi-icon comments">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <div className="kpi-content">
+                <span className="kpi-value">52</span>
+                <span className="kpi-label">Avg Comments</span>
+                <span className="kpi-trend">↗ 8%</span>
+              </div>
+            </div>
+            
+            <div className="kpi-card">
+              <div className="kpi-icon engagement">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </div>
+              <div className="kpi-content">
+                <span className="kpi-value">6.2%</span>
+                <span className="kpi-label">Engagement</span>
+                <span className="kpi-trend">↗ 2%</span>
+              </div>
+            </div>
           </div>
         </div>
-      </nav>
-
-      {/* Profile Header */}
-      <div className="profile-header">
-        <div className="profile-photo"></div>
-        <div className="profile-info">
-          <h2 className="username">{profileData.username}</h2>
-          <p className="profile-sections">{profileData.name}, {profileData.bio}</p>
-          <p className="stats">
-            {profileData.totalPosts} posts • {profileData.totalFollowers}k followers • {profileData.totalFollowing} following
-          </p>
-        </div>
       </div>
 
-      {/* KPI Section */}
-      <div className="kpi-section">
-        <div className="kpi-item">
-          <span className="kpi-label">Average Likes</span>
-          <span className="kpi-value">{profileData.averageLikes}</span>
-          <span className="kpi-trend">↗ {profileData.growthRate}%</span>
+      {/* Modern Navigation */}
+      <div className="modern-nav">
+        <div className="nav-pills">
+          <button 
+            className={`nav-pill ${activeTab === 'content' ? 'active' : ''}`}
+            onClick={() => setActiveTab('content')}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2"/>
+              <path d="M9 9h6v6H9z"/>
+            </svg>
+            Content
+          </button>
+          <button 
+            className={`nav-pill ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3v18h18"/>
+              <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+            </svg>
+            Analytics
+          </button>
         </div>
-        <div className="kpi-item">
-          <span className="kpi-label">Average Comments</span>
-          <span className="kpi-value">52</span>
-          <span className="kpi-trend">↗ 8%</span>
-        </div>
-        <div className="kpi-item">
-          <span className="kpi-label">Engagement Rate</span>
-          <span className="kpi-value">6.2%</span>
-          <span className="kpi-trend">↗ 2%</span>
-        </div>
-      </div>
-
-      {/* Primary Navigation */}
-      <div className="primary-nav">
-        <button 
-          className={`nav-button ${activeTab === 'content' ? 'active' : ''}`}
-          onClick={() => setActiveTab('content')}
-        >
-          Content
-        </button>
-        <button 
-          className={`nav-button ${activeTab === 'analytics' ? 'active' : ''}`}
-          onClick={() => setActiveTab('analytics')}
-        >
-          Analytics
-        </button>
       </div>
 
       {/* Content/Analytics Display */}
       {activeTab === 'content' ? (
         <div className="content-display">
-          <div className="content-nav">
-            <button className="content-tab active">Posts</button>
-            <button className="content-tab">Reels</button>
+          <div className="content-header">
+            <div className="content-filters">
+              <button className="filter-btn active">Posts</button>
+              <button className="filter-btn">Reels</button>
+            </div>
+            <div className="content-actions">
+              <button className="action-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+                </svg>
+              </button>
+            </div>
           </div>
           <div className="content-grid">
             {Array.from({length: 12}, (_, i) => (
-              <div key={i} className="content-item">
-                <div className="content-photo">
-                  <span>Photo {i + 1}</span>
-                  <div className="content-stats">
-                    <span>❤️ {Math.floor(Math.random() * 1000) + 100}</span>
-                    <span>💬 {Math.floor(Math.random() * 100) + 10}</span>
+              <div key={i} className="content-card">
+                <div className="card-media">
+                  <div className="media-placeholder">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="18" height="18" x="3" y="3" rx="2"/>
+                      <circle cx="9" cy="9" r="2"/>
+                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                    </svg>
+                  </div>
+                  <div className="media-overlay">
+                    <div className="engagement-stats">
+                      <span className="stat">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
+                        </svg>
+                        {Math.floor(Math.random() * 1000) + 100}
+                      </span>
+                      <span className="stat">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        {Math.floor(Math.random() * 100) + 10}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="content-info">
-                  <div className="content-keywords">
-                    <span className="keyword">#{['food', 'travel', 'lifestyle', 'aesthetic'][Math.floor(Math.random() * 4)]}</span>
-                    <span className="vibe">{['Casual', 'Luxury', 'Energetic'][Math.floor(Math.random() * 3)]}</span>
+                <div className="card-content">
+                  <div className="content-meta">
+                    <span className="content-tag">#{['food', 'travel', 'lifestyle', 'aesthetic'][Math.floor(Math.random() * 4)]}</span>
+                    <span className="content-vibe">{['Casual', 'Luxury', 'Energetic'][Math.floor(Math.random() * 3)]}</span>
+                  </div>
+                  <div className="content-performance">
+                    <div className="performance-bar">
+                      <div 
+                        className="performance-fill" 
+                        style={{ width: `${Math.floor(Math.random() * 40) + 60}%` }}
+                      ></div>
+                    </div>
+                    <span className="performance-score">{Math.floor(Math.random() * 40) + 60}%</span>
                   </div>
                 </div>
               </div>
@@ -145,17 +216,19 @@ const Dashboard = () => {
         </div>
       ) : (
         <>
-          {/* Secondary Navigation - Analytics Sub-tabs */}
-          <div className="secondary-nav">
-            {sections.map(section => (
-              <button
-                key={section.id}
-                className={`nav-tab ${activeSection === section.id ? 'active' : ''}`}
-                onClick={() => setActiveSection(section.id)}
-              >
-                {section.name}
-              </button>
-            ))}
+          {/* Analytics Navigation */}
+          <div className="analytics-nav">
+            <div className="analytics-pills">
+              {sections.map(section => (
+                <button
+                  key={section.id}
+                  className={`analytics-pill ${activeSection === section.id ? 'active' : ''}`}
+                  onClick={() => setActiveSection(section.id)}
+                >
+                  {section.name}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Analytics Display Area */}

@@ -1,288 +1,413 @@
-from flask import Flask, request, jsonify
-import requests
-import base64
-import json
-from io import BytesIO
-from PIL import Image
-import os
-from dotenv import load_dotenv
+"""
+Flask + OpenCV image-level analyzer (hardcoded heuristics)
 
-# Load environment variables
-load_dotenv()
+Features:
+- POST /analyze accepts multipart-form file field `image` or JSON {"url": "..."}
+- Computes many low-level features (brightness, contrast, sharpness, colorfulness, edge density,
+  dominant color, saturation, face count, skin-tone ratio, aspect ratio, etc.)
+- Generates a large list of hardcoded tags using thresholded heuristics
+- Classifies vibe/ambience into multiple categories with scores
+- Returns JSON with tags, vibes (scores + chosen label), quality indicators, and raw metrics
+
+Notes:
+- This is *heuristic* and intentionally "hardcoded"; no ML model is used.
+- Requires: Python 3.8+, Flask, requests, opencv-python, numpy, Pillow, scikit-learn
+
+Install:
+    pip install flask requests opencv-python-headless numpy pillow scikit-learn flask-cors
+
+Run:
+    python flask_opencv_image_analysis.py
+
+Example curl (file):
+    curl -F "image=@/path/to/photo.jpg" http://127.0.0.1:5000/analyze
+
+Example curl (URL):
+    curl -H "Content-Type: application/json" -d '{"url":"https://example.com/pic.jpg"}' http://127.0.0.1:5000/analyze
+
+"""
+
+from io import BytesIO
+import math
+import json
+import cv2
+import numpy as np
+from sklearn.cluster import KMeans
+from PIL import Image
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import requests
 
 app = Flask(__name__)
+CORS(app)
 
-# Configuration
-HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN')  # Get token from environment variable
-CLIP_MODEL_URL = "https://api-inference.huggingface.co/models/openai/clip-vit-base-patch32"
+# Load Haar cascade for face detection
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-# Predefined categories for analysis
-KEYWORDS = [
-    "food", "travel", "fashion", "nature", "people", "animals", "architecture", 
-    "technology", "art", "sports", "music", "business", "home", "car", "beach"
-]
+# --- Utility image helpers ---
 
-VIBES = [
-    "casual", "aesthetic", "luxury", "energetic", "calm", "professional", 
-    "cozy", "minimalist", "vintage", "modern", "romantic", "edgy"
-]
+def read_image_from_file(file_storage):
+    data = file_storage.read()
+    return read_image_from_bytes(data)
 
-QUALITY_INDICATORS = [
-    "professional photography", "good lighting", "high quality", "sharp focus",
-    "well composed", "vibrant colors", "clear image", "artistic"
-]
 
-def encode_image(image_file):
-    """Convert image file to base64 string"""
-    try:
-        # Read image and convert to RGB if necessary
-        image = Image.open(image_file)
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # Convert to base64
-        buffered = BytesIO()
-        image.save(buffered, format="JPEG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
-        return img_str
-    except Exception as e:
-        raise ValueError(f"Error processing image: {str(e)}")
+def read_image_from_url(url, timeout=8):
+    resp = requests.get(url, timeout=timeout)
+    resp.raise_for_status()
+    return read_image_from_bytes(resp.content)
 
-def query_clip_model(image_data, categories):
-    """Query CLIP model with image and text categories"""
-    headers = {
-        "Authorization": f"Bearer {HUGGINGFACE_TOKEN}",
-        "Content-Type": "application/json"
+
+def read_image_from_bytes(data):
+    arr = np.frombuffer(data, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError('Could not decode image')
+    return img
+
+# --- Low-level metrics ---
+
+def compute_brightness(img_gray):
+    # mean pixel intensity (0-255)
+    return float(np.mean(img_gray))
+
+
+def compute_contrast(img_gray):
+    # standard deviation of luminance
+    return float(np.std(img_gray))
+
+
+def compute_sharpness(img_gray):
+    # variance of Laplacian
+    return float(cv2.Laplacian(img_gray, cv2.CV_64F).var())
+
+
+def compute_colorfulness(img):
+    # From Hasler and Suesstrunk: colorfulness metric
+    (B, G, R) = cv2.split(img.astype('float'))
+    rg = np.absolute(R - G)
+    yb = np.absolute(0.5 * (R + G) - B)
+    stdRoot = np.sqrt((rg.std() ** 2) + (yb.std() ** 2))
+    meanRoot = np.sqrt((rg.mean() ** 2) + (yb.mean() ** 2))
+    return float(stdRoot + (0.3 * meanRoot))
+
+
+def compute_edge_density(img_gray):
+    edges = cv2.Canny(img_gray, 100, 200)
+    return float(np.count_nonzero(edges) / edges.size)
+
+
+def compute_dominant_color(img, k=3):
+    # Resize to speed up
+    small = cv2.resize(img, (100, 100), interpolation=cv2.INTER_AREA)
+    data = small.reshape((-1, 3))
+    km = KMeans(n_clusters=k, random_state=0, n_init=4)
+    km.fit(data)
+    centers = km.cluster_centers_.astype(int)
+    counts = np.bincount(km.labels_)
+    dominant = centers[np.argmax(counts)]
+    # return as RGB tuple
+    return int(dominant[2]), int(dominant[1]), int(dominant[0])
+
+
+def compute_saturation_mean(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    return float(np.mean(hsv[:, :, 1]))
+
+
+def compute_skin_ratio(img):
+    # crude skin detection in HSV and YCrCb space
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+    h, s, v = cv2.split(hsv)
+    y, cr, cb = cv2.split(ycrcb)
+    skin_mask1 = cv2.inRange(hsv, np.array([0, 15, 0]), np.array([25, 200, 255]))
+    skin_mask2 = cv2.inRange(ycrcb, np.array([0, 135, 85]), np.array([255, 180, 135]))
+    skin = cv2.bitwise_and(skin_mask1, skin_mask2)
+    ratio = float(np.count_nonzero(skin) / skin.size)
+    return ratio
+
+# --- Heuristic tag generation (lots of hardcoded rules) ---
+
+HARDCODED_TAG_BUCKETS = {
+    'basic': ['food', 'travel', 'fashion', 'architecture', 'nature', 'urban', 'portrait', 'product', 'street', 'night', 'interior', 'landscape', 'selfie', 'group', 'pets', 'sports', 'event', 'wedding', 'art', 'flatlay', 'macro', 'detail', 'aerial', 'panorama', 'minimal', 'editorial'],
+    'style': ['casual', 'formal', 'vintage', 'modern', 'gritty', 'soft', 'clean', 'moody', 'bright', 'muted', 'colorful', 'monochrome', 'film', 'cinematic', 'high-contrast', 'low-contrast'],
+    'moods': ['energetic', 'calm', 'romantic', 'melancholic', 'playful', 'serene', 'luxury', 'cozy', 'dramatic', 'aesthetic', 'raw', 'documentary'],
+    'technical': ['blurry', 'sharp', 'noisy', 'low-light', 'overexposed', 'underexposed', 'balanced', 'high-dynamic-range', 'well-composed', 'off-center', 'rule-of-thirds', 'high-saturation', 'low-saturation'],
+}
+
+def generate_tags_from_metrics(metrics):
+    tags = set()
+    b = metrics['brightness']
+    c = metrics['contrast']
+    sharp = metrics['sharpness']
+    colorf = metrics['colorfulness']
+    edges = metrics['edge_density']
+    sat = metrics['saturation_mean']
+    faces = metrics['faces']
+    skin = metrics['skin_ratio']
+    h, w = metrics['height'], metrics['width']
+    ar = w / (h + 1e-9)
+
+    # Basic scene guesses
+    if faces > 0:
+        tags.update(['portrait', 'people'])
+        if faces == 1:
+            tags.add('selfie')
+        else:
+            tags.add('group')
+    if ar > 1.6:
+        tags.add('landscape')
+        tags.add('panorama')
+    if ar < 0.8:
+        tags.add('vertical')
+        tags.add('portrait-orientation')
+
+    # Lighting tags
+    if b > 200:
+        tags.add('bright')
+        tags.add('sunny')
+    elif b > 120:
+        tags.add('well-lit')
+    else:
+        tags.add('dark')
+        tags.add('moody')
+
+    # Exposure / contrast
+    if c < 25:
+        tags.add('low-contrast')
+    elif c > 60:
+        tags.add('high-contrast')
+
+    # Sharpness
+    if sharp < 50:
+        tags.add('blurry')
+    elif sharp > 400:
+        tags.add('very-sharp')
+    else:
+        tags.add('sharp')
+
+    # Colorfulness and saturation
+    if colorf > 40:
+        tags.add('colorful')
+        tags.add('vibrant')
+    else:
+        tags.add('muted')
+    if sat > 80:
+        tags.add('high-saturation')
+    elif sat < 30:
+        tags.add('low-saturation')
+
+    # Edge / detail
+    if edges > 0.06:
+        tags.add('detailed')
+        tags.add('textured')
+    elif edges < 0.015:
+        tags.add('smooth')
+
+    # Skin and fashion heuristics
+    if skin > 0.02 and faces > 0:
+        tags.add('fashion')
+        tags.add('beauty')
+    if skin > 0.01 and faces == 0:
+        tags.add('hands')
+        tags.add('skin-present')
+
+    # Time of day guess via brightness+color temp-ish
+    if b > 220 and colorf > 35:
+        tags.add('daytime')
+    if b < 80 and colorf < 25:
+        tags.add('night')
+
+    # Composition heuristics (rule-of-thirds: high variance of centroid)
+    if metrics['centroid_distance_from_center'] < 0.18:
+        tags.add('centered')
+    else:
+        tags.add('off-center')
+        tags.add('rule-of-thirds')
+
+    # Add bucketed tags to increase hardcoded tag count
+    # Pick some from HARDCODED_TAG_BUCKETS depending on metrics
+    if faces > 0 and colorf > 30:
+        tags.update(['editorial', 'portrait', 'fashion'])
+    if ar > 2.0 and edges > 0.04:
+        tags.update(['aerial', 'landscape', 'panorama'])
+    if b < 90 and sharp > 200:
+        tags.update(['dramatic', 'cinematic'])
+    if colorf > 60 and sat > 100:
+        tags.update(['pop', 'color-bomb', 'in-your-face'])
+
+    # Force-add many extra hardcoded descriptors to satisfy "too many hardcoded tags"
+    extra_force = [
+        'visual', 'composition', 'frame', 'tone', 'ambience', 'look', 'feel', 'mood', 'palette', 'grain', 'texture', 'contrasty', 'flat', 'glossy', 'matte',
+        'studio', 'ambient', 'natural-light', 'art-direct', 'documentary', 'lifestyle', 'editorial-style', 'campaign', 'closeup', 'wide-angle'
+    ]
+    # Choose a subset depending on simple thresholds (deterministic)
+    if metrics['width'] * metrics['height'] > 800 * 800:
+        tags.update(extra_force[:8])
+    else:
+        tags.update(extra_force[2:12])
+
+    # Normalize and return
+    return sorted(list(tags))
+
+# --- Vibe classification (heuristic, returns scores) ---
+
+VIBE_LABELS = ['casual', 'aesthetic', 'luxury/lavish', 'energetic', 'calm', 'moody', 'playful']
+
+def classify_vibe(metrics):
+    # Create simple score by weighted sum of normalized features
+    # Normalize by reasonable constants to keep values small
+    norm_b = (metrics['brightness'] - 100) / 100.0
+    norm_color = metrics['colorfulness'] / 50.0
+    norm_sharp = metrics['sharpness'] / 200.0
+    norm_edges = metrics['edge_density'] / 0.05
+    norm_sat = metrics['saturation_mean'] / 100.0
+    faces = metrics['faces']
+
+    scores = {k: 0.0 for k in VIBE_LABELS}
+
+    # casual: moderate brightness, faces present, moderate sharpness
+    scores['casual'] = 0.4 * faces + 0.3 * (1 - abs(norm_b)) + 0.3 * min(norm_sharp, 1.0)
+    # aesthetic: high colorfulness, balanced contrast, high sharpness
+    scores['aesthetic'] = 0.5 * min(norm_color, 1.5) + 0.3 * min(norm_sharp, 1.5) + 0.2 * (norm_sat)
+    # luxury/lavish: low clutter (low edge density), warm brightness, centered composition
+    scores['luxury/lavish'] = 0.4 * max(0, norm_b) + 0.4 * (1 - min(norm_edges, 1.0)) + 0.2 * (1 - metrics['centroid_distance_from_center'])
+    # energetic: high colorfulness, high edge density, high saturation
+    scores['energetic'] = 0.45 * min(norm_color, 2.0) + 0.35 * min(norm_edges, 2.0) + 0.2 * min(norm_sat, 2.0)
+    # calm: low colorfulness, low edge density, low sharpness
+    scores['calm'] = 0.5 * (1 - min(norm_color, 1.0)) + 0.3 * (1 - min(norm_edges, 1.0)) + 0.2 * (1 - min(norm_sharp, 1.0))
+    # moody: low brightness, high contrast, high sharpness
+    scores['moody'] = 0.5 * max(0, -norm_b) + 0.3 * (metrics['contrast'] / 80.0) + 0.2 * min(norm_sharp, 2.0)
+    # playful: faces, bright, colorful
+    scores['playful'] = 0.5 * faces + 0.3 * max(0, norm_b) + 0.2 * min(norm_color, 1.5)
+
+    # Clamp and normalize to 0..1
+    for k in scores:
+        scores[k] = float(max(0.0, min(1.0, scores[k])))
+
+    # pick top label
+    top = max(scores.items(), key=lambda x: x[1])
+    return {'scores': scores, 'label': top[0], 'confidence': top[1]}
+
+# --- Composition helpers ---
+
+def compute_centroid_distance(img_gray):
+    # Treat brightness as mass; compute centroid and distance from image center
+    h, w = img_gray.shape[:2]
+    norm = img_gray.astype(np.float32) / 255.0
+    total = np.sum(norm) + 1e-9
+    coords = np.indices((h, w)).astype(np.float32)
+    y_coords = coords[0]
+    x_coords = coords[1]
+    centroid_y = np.sum(y_coords * norm) / total
+    centroid_x = np.sum(x_coords * norm) / total
+    # Normalize distance relative to image diagonal
+    center_y = h / 2.0
+    center_x = w / 2.0
+    dist = math.hypot((centroid_x - center_x) / w, (centroid_y - center_y) / h)
+    return float(dist)
+
+# --- Main analyze function ---
+
+def analyze_image(img):
+    # Expect BGR OpenCV image
+    h, w = img.shape[:2]
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    brightness = compute_brightness(img_gray)
+    contrast = compute_contrast(img_gray)
+    sharpness = compute_sharpness(img_gray)
+    colorfulness = compute_colorfulness(img)
+    edge_density = compute_edge_density(img_gray)
+    dominant_rgb = compute_dominant_color(img)
+    saturation_mean = compute_saturation_mean(img)
+    skin_ratio = compute_skin_ratio(img)
+
+    # Face detection (scale down for speed)
+    small = cv2.resize(img_gray, (0, 0), fx=0.6, fy=0.6)
+    faces = face_cascade.detectMultiScale(small, scaleFactor=1.1, minNeighbors=5)
+    face_count = int(len(faces))
+
+    centroid_dist = compute_centroid_distance(img_gray)
+
+    metrics = {
+        'width': int(w),
+        'height': int(h),
+        'brightness': brightness,
+        'contrast': contrast,
+        'sharpness': sharpness,
+        'colorfulness': colorfulness,
+        'edge_density': edge_density,
+        'dominant_rgb': dominant_rgb,
+        'saturation_mean': saturation_mean,
+        'skin_ratio': skin_ratio,
+        'faces': face_count,
+        'centroid_distance_from_center': centroid_dist,
     }
-    
-    payload = {
-        "inputs": {
-            "image": image_data,
-            "text": categories
-        }
+
+    tags = generate_tags_from_metrics(metrics)
+    vibe = classify_vibe(metrics)
+
+    # Quality indicators (composed)
+    quality = {}
+    # Lighting
+    if brightness < 80:
+        quality['lighting'] = 'underexposed'
+    elif brightness > 230:
+        quality['lighting'] = 'overexposed'
+    else:
+        quality['lighting'] = 'good'
+    # Visual appeal score (0-100), heuristic
+    appeal = 0.0
+    # favor mid brightness, high colorfulness, good sharpness
+    appeal += max(0, 1 - abs((brightness - 140) / 140.0)) * 30
+    appeal += min(colorfulness / 80.0, 1.0) * 30
+    appeal += min(sharpness / 400.0, 1.0) * 25
+    appeal += min(contrast / 80.0, 1.0) * 15
+    quality['visual_appeal'] = int(max(0, min(100, round(appeal))))
+
+    # Consistency: placeholder rule comparing to built-in "presets"
+    # We'll compute distance to 3 style centroids: bright, moody, colorful
+    bright_centroid = np.array([160.0, 40.0, 200.0])  # brightness, contrast, colorfulness
+    moody_centroid = np.array([60.0, 70.0, 15.0])
+    colorful_centroid = np.array([140.0, 35.0, 70.0])
+    sample = np.array([brightness, contrast, colorfulness])
+    dists = [np.linalg.norm(sample - bright_centroid), np.linalg.norm(sample - moody_centroid), np.linalg.norm(sample - colorful_centroid)]
+    consistency_score = float(100 - min(dists) / 2.0)
+    quality['consistency'] = int(max(0, min(100, round(consistency_score))))
+
+    # Assemble final result
+    result = {
+        'tags': tags,
+        'vibe': vibe,
+        'quality': quality,
+        'metrics': metrics,
     }
-    
-    try:
-        response = requests.post(CLIP_MODEL_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"API request failed: {str(e)}")
+    return result
 
-def process_clip_results(results, categories, threshold=0.1):
-    """Process CLIP results and categorize them"""
-    if not isinstance(results, list) or len(results) != len(categories):
-        raise ValueError("Invalid response format from CLIP model")
-    
-    # Combine categories with their scores
-    scored_items = list(zip(categories, results))
-    
-    # Separate into different types and filter by threshold
-    keywords = []
-    vibes = []
-    quality = []
-    
-    for category, score in scored_items:
-        if score > threshold:
-            if category in KEYWORDS:
-                keywords.append({"tag": category, "confidence": round(score, 3)})
-            elif category in VIBES:
-                vibes.append({"vibe": category, "confidence": round(score, 3)})
-            elif category in QUALITY_INDICATORS:
-                quality.append({"indicator": category, "confidence": round(score, 3)})
-    
-    # Sort by confidence (descending)
-    keywords.sort(key=lambda x: x["confidence"], reverse=True)
-    vibes.sort(key=lambda x: x["confidence"], reverse=True)
-    quality.sort(key=lambda x: x["confidence"], reverse=True)
-    
-    return {
-        "keywords": keywords[:5],  # Top 5 keywords
-        "vibe_ambience": vibes[:3],  # Top 3 vibes
-        "quality_indicators": quality[:3]  # Top 3 quality indicators
-    }
-
-@app.route('/')
-def home():
-    """Home endpoint with API documentation"""
-    return jsonify({
-        "message": "Image Analysis API using CLIP",
-        "endpoints": {
-            "/analyze": "POST - Upload image for analysis",
-            "/analyze-batch": "POST - Analyze multiple images from URLs",
-            "/categories": "GET - Get available analysis categories",
-            "/health": "GET - Check API health"
-        },
-        "usage": {
-            "single_image": {
-                "method": "POST",
-                "endpoint": "/analyze",
-                "content_type": "multipart/form-data",
-                "parameter": "image (file)"
-            },
-            "batch_analysis": {
-                "method": "POST",
-                "endpoint": "/analyze-batch",
-                "content_type": "application/json",
-                "body": {"image_urls": ["url1", "url2", "url3"]}
-            }
-        }
-    })
-
-@app.route('/health')
-def health():
-    """Health check endpoint"""
-    return jsonify({"status": "healthy", "model": "CLIP", "version": "1.0"})
+# --- Flask endpoints ---
 
 @app.route('/analyze', methods=['POST'])
-def analyze_image():
-    """Main endpoint for image analysis"""
+def analyze_endpoint():
     try:
-        # Check if image file is provided
-        if 'image' not in request.files:
-            return jsonify({"error": "No image file provided"}), 400
-        
-        image_file = request.files['image']
-        
-        if image_file.filename == '':
-            return jsonify({"error": "No image file selected"}), 400
-        
-        # Validate file type
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
-        file_extension = image_file.filename.rsplit('.', 1)[1].lower()
-        if file_extension not in allowed_extensions:
-            return jsonify({"error": "Invalid file type. Supported: png, jpg, jpeg, gif, bmp, webp"}), 400
-        
-        # Process image
-        image_data = encode_image(image_file)
-        
-        # Prepare all categories for analysis
-        all_categories = KEYWORDS + VIBES + QUALITY_INDICATORS
-        
-        # Query CLIP model
-        clip_results = query_clip_model(image_data, all_categories)
-        
-        # Process and categorize results
-        analysis_results = process_clip_results(clip_results, all_categories)
-        
-        # Prepare response
-        response = {
-            "status": "success",
-            "filename": image_file.filename,
-            "analysis": analysis_results,
-            "summary": {
-                "total_keywords": len(analysis_results["keywords"]),
-                "primary_vibe": analysis_results["vibe_ambience"][0]["vibe"] if analysis_results["vibe_ambience"] else "neutral",
-                "quality_score": analysis_results["quality_indicators"][0]["confidence"] if analysis_results["quality_indicators"] else 0.0
-            }
-        }
-        
-        return jsonify(response)
-    
-    except ValueError as e:
-        return jsonify({"error": f"Image processing error: {str(e)}"}), 400
+        # Accept either multipart file or JSON with url
+        if 'image' in request.files:
+            img = read_image_from_file(request.files['image'])
+        else:
+            payload = request.get_json(force=True, silent=True)
+            if payload and 'url' in payload:
+                img = read_image_from_url(payload['url'])
+            else:
+                return jsonify({'error': 'No image file or url provided'}), 400
+
+        result = analyze_image(img)
+        return jsonify(result)
     except Exception as e:
-        return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/analyze-batch', methods=['POST'])
-def analyze_batch_images():
-    """Analyze multiple images from URLs"""
-    try:
-        data = request.get_json()
-        
-        if not data or 'image_urls' not in data:
-            return jsonify({"error": "No image_urls provided in JSON body"}), 400
-        
-        image_urls = data['image_urls']
-        
-        if not isinstance(image_urls, list):
-            return jsonify({"error": "image_urls must be an array"}), 400
-        
-        if len(image_urls) > 10:  # Limit to prevent abuse
-            return jsonify({"error": "Maximum 10 images allowed per batch"}), 400
-        
-        results = []
-        all_categories = KEYWORDS + VIBES + QUALITY_INDICATORS
-        
-        for i, url in enumerate(image_urls):
-            try:
-                # Download image from URL
-                response = requests.get(url, timeout=30)
-                response.raise_for_status()
-                
-                # Create BytesIO object from response content
-                image_file = BytesIO(response.content)
-                
-                # Process image
-                image_data = encode_image(image_file)
-                
-                # Query CLIP model
-                clip_results = query_clip_model(image_data, all_categories)
-                
-                # Process and categorize results
-                analysis_results = process_clip_results(clip_results, all_categories)
-                
-                results.append({
-                    "url": url,
-                    "index": i,
-                    "status": "success",
-                    "analysis": analysis_results,
-                    "summary": {
-                        "total_keywords": len(analysis_results["keywords"]),
-                        "primary_vibe": analysis_results["vibe_ambience"][0]["vibe"] if analysis_results["vibe_ambience"] else "neutral",
-                        "quality_score": analysis_results["quality_indicators"][0]["confidence"] if analysis_results["quality_indicators"] else 0.0
-                    }
-                })
-                
-            except Exception as e:
-                results.append({
-                    "url": url,
-                    "index": i,
-                    "status": "error",
-                    "error": str(e)
-                })
-        
-        return jsonify({
-            "status": "completed",
-            "total_images": len(image_urls),
-            "successful": len([r for r in results if r["status"] == "success"]),
-            "failed": len([r for r in results if r["status"] == "error"]),
-            "results": results
-        })
-        
-    except Exception as e:
-        return jsonify({"error": f"Batch analysis failed: {str(e)}"}), 500
-
-@app.route('/categories')
-def get_categories():
-    """Get all available categories for analysis"""
-    return jsonify({
-        "keywords": KEYWORDS,
-        "vibes": VIBES,
-        "quality_indicators": QUALITY_INDICATORS
-    })
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"error": "Endpoint not found"}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({"error": "Internal server error"}), 500
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({'status': 'flask-opencv-image-analyzer', 'endpoints': ['/analyze (POST)']})
 
 if __name__ == '__main__':
-    # Check if token is set
-    if not HUGGINGFACE_TOKEN:
-        print("⚠️  WARNING: Please set your Hugging Face token in the HUGGINGFACE_TOKEN environment variable!")
-        print("   Get your token from: https://huggingface.co/settings/tokens")
-        print("   Set it with: export HUGGINGFACE_TOKEN=your_token_here")
-    
-    print("🚀 Starting Image Analysis API...")
-    print("📝 Available endpoints:")
-    print("   GET  /             - API documentation")
-    print("   GET  /health       - Health check")
-    print("   POST /analyze      - Single image analysis")
-    print("   POST /analyze-batch - Batch image analysis from URLs")
-    print("   GET  /categories   - Available categories")
-    
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)

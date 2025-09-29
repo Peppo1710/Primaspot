@@ -31,6 +31,46 @@ class InstagramService {
   // ----------------------
 
   /**
+   * Check if a username exists on Instagram
+   * Returns boolean and basic profile info if exists
+   */
+  async checkUsernameExists(username) {
+    try {
+      logger.info(`Checking if username @${username} exists on Instagram`);
+      if (!this.isValidUsername(username)) throw new ApiError(400, 'Invalid username format');
+
+      await this.checkRateLimit();
+
+      const profileUrl = `${this.baseURL}/api/v1/users/web_profile_info/?username=${username}`;
+      const response = await this.makeRequest(profileUrl);
+
+      if (!response.data?.data?.user) {
+        return { exists: false, profile: null };
+      }
+
+      const user = response.data.data.user;
+      const profileData = this.transformProfileData(user);
+
+      return { 
+        exists: true, 
+        profile: profileData,
+        instagram_id: user.id,
+        is_private: user.is_private || false,
+        is_verified: user.is_verified || false
+      };
+    } catch (error) {
+      logger.error(`Error checking username @${username}:`, error.message || error);
+      
+      // If it's a 404 error, the user doesn't exist
+      if (error.statusCode === 404) {
+        return { exists: false, profile: null };
+      }
+      
+      throw this.handleInstagramError(error, username);
+    }
+  }
+
+  /**
    * Fetch profile only (transformed) and persist a raw profile row.
    * Returns { profile, rawProfileRow }
    */
