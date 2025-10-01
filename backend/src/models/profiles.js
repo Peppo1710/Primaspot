@@ -16,6 +16,22 @@ const profilesSchema = new mongoose.Schema({
   profile_picture_url: {
     type: String
   },
+  bio_text: {
+    type: String,
+    maxlength: 1000
+  },
+  website_url: {
+    type: String
+  },
+  is_verified: {
+    type: Boolean,
+    default: false
+  },
+  account_type: {
+    type: String,
+    enum: ['personal', 'business', 'creator'],
+    default: 'personal'
+  },
   followers_count: {
     type: Number,
     default: 0,

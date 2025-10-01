@@ -3,6 +3,7 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 const ApiError = require('../utils/ApiError');
 const DatabaseService = require('./DatabaseService');
+const CloudinaryService = require('./CloudinaryService');
 
 class InstagramService {
   constructor() {
@@ -24,6 +25,9 @@ class InstagramService {
 
     // DB service
     this.db = new DatabaseService();
+    
+    // Cloudinary service for media uploads
+    this.cloudinary = new CloudinaryService();
   }
 
   // ----------------------
@@ -91,6 +95,16 @@ class InstagramService {
       const user = response.data.data.user;
       const profileData = this.transformProfileData(user);
 
+      // Upload profile picture to Cloudinary
+      if (profileData.profile.profile_pic_url) {
+        logger.info(`Uploading profile picture to Cloudinary for @${username}`);
+        const cloudinaryUrl = await this.cloudinary.uploadProfilePicture(
+          profileData.profile.profile_pic_url,
+          username
+        );
+        profileData.profile.profile_pic_url = cloudinaryUrl;
+      }
+
       // Persist raw profile row to instagram_data
       const rawRow = {
         username: profileData.instagram_username,
@@ -141,6 +155,36 @@ class InstagramService {
         posts = await this.fetchAllPosts(username, user, posts);
       }
 
+      // Upload all media to Cloudinary
+      logger.info(`Uploading ${posts.length} posts media to Cloudinary for @${username}`);
+      for (const post of posts) {
+        try {
+          // Upload post image
+          if (post.display_url) {
+            const cloudinaryImageUrl = await this.cloudinary.uploadPostImage(
+              post.display_url,
+              username,
+              post.shortcode || post.instagram_post_id
+            );
+            post.display_url = cloudinaryImageUrl;
+            post.thumbnail_url = cloudinaryImageUrl; // Use same URL for thumbnail
+          }
+
+          // Upload post video if exists
+          if (post.video_url) {
+            const cloudinaryVideoUrl = await this.cloudinary.uploadPostVideo(
+              post.video_url,
+              username,
+              post.shortcode || post.instagram_post_id
+            );
+            post.video_url = cloudinaryVideoUrl;
+          }
+        } catch (uploadError) {
+          logger.error(`Error uploading media for post ${post.shortcode}: ${uploadError.message}`);
+          // Continue with next post even if upload fails
+        }
+      }
+
       // Build raw rows and persist
       const rawRows = posts.map(p => ({
         username,
@@ -164,7 +208,7 @@ class InstagramService {
       }));
 
       const savedRaw = await this.db.saveRawInstagramRows(rawRows);
-      logger.info(`Saved ${savedRaw.length} raw post rows for @${username}`);
+      logger.info(`Saved ${savedRaw.length} raw post rows for @${username} with Cloudinary URLs`);
 
       return { posts, rawPostRows: savedRaw };
     } catch (error) {

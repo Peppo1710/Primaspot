@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Dashboard.css';
+import { getGlobalUsername } from '../store/globalStore';
+import { api } from '../services/api';
+import imageCache from '../services/imageCache';
 import { 
-  profileData, 
   engagementData, 
   contentAnalysisData, 
   performanceData 
@@ -25,16 +27,92 @@ import {
 } from 'recharts';
 
 const Dashboard = () => {
-  const [activeSection, setActiveSection] = useState('overview');
-  const [activeTab, setActiveTab] = useState('analytics');
+  const [activeSection, setActiveSection] = useState('engagement');
+  const [activeTab, setActiveTab] = useState('content');
+  const [contentType, setContentType] = useState('posts');
   const navigate = useNavigate();
+  
+  // API Data States
+  const [username, setUsername] = useState('');
+  const [profileData, setProfileData] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [reels, setReels] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [engagement, setEngagement] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const sections = [
-    { id: 'overview', name: 'Overview', data: engagementData },
-    { id: 'performance', name: 'Performance', data: engagementData },
-    { id: 'content', name: 'Content', data: contentAnalysisData },
-    { id: 'quality', name: 'Quality', data: performanceData }
-  ];
+  // Fetch all data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      const user = getGlobalUsername();
+      if (!user) {
+        navigate('/');
+        return;
+      }
+      
+      setUsername(user);
+      setLoading(true);
+      
+      try {
+        const [profileRes, postsRes, reelsRes, analyticsRes, engagementRes] = await Promise.all([
+          api.getUserProfile(user),
+          api.getUserPosts(user, 1, 50),
+          api.getUserReels(user, 1, 50),
+          api.getPostAnalytics(user).catch(() => ({ success: false })),
+          api.getEngagementMetrics(user)
+        ]);
+        
+        // Cache images locally in browser (no backend involved)
+        if (profileRes.success && postsRes.success && reelsRes.success) {
+          const cachedData = await imageCache.processUserData(
+            user,
+            profileRes.data,
+            postsRes.data,
+            reelsRes.data
+          );
+          
+          setProfileData(cachedData.profile);
+          setPosts(cachedData.posts);
+          setReels(cachedData.reels);
+        } else {
+          if (profileRes.success) setProfileData(profileRes.data);
+          if (postsRes.success) setPosts(postsRes.data);
+          if (reelsRes.success) setReels(reelsRes.data);
+        }
+        
+        if (analyticsRes.success) setAnalytics(analyticsRes.data);
+        if (engagementRes.success) setEngagement(engagementRes.data);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="analytics-container">
+        <div className="loading-screen">
+          <div className="loader-spinner"></div>
+          <p>Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profileData) {
+    return (
+      <div className="analytics-container">
+        <div className="error-screen">
+          <p>Failed to load profile data</p>
+          <button onClick={() => navigate('/')}>Back to Search</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="analytics-container">
@@ -55,7 +133,18 @@ const Dashboard = () => {
           <div className="profile-showcase">
             <div className="profile-photo">
               <div className="photo-glow"></div>
-              <div className="photo-inner">
+              {profileData.profile.profile_picture_url ? (
+                <img 
+                  src={profileData.profile.profile_picture_url} 
+                  alt={profileData.username}
+                  onError={(e) => {
+                    console.error('Failed to load profile image:', profileData.profile.profile_picture_url);
+                    e.target.style.display = 'none';
+                    e.target.parentElement.querySelector('.photo-inner').style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div className="photo-inner" style={{ display: profileData.profile.profile_picture_url ? 'none' : 'flex' }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                   <circle cx="12" cy="7" r="4"/>
@@ -63,19 +152,28 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="profile-details">
-              <h1 className="profile-name">{profileData.username}</h1>
-              <p className="profile-bio">{profileData.name} • {profileData.bio}</p>
+              <h1 className="profile-name">@{profileData.username}</h1>
+              <p className="profile-bio">
+                {profileData.profile.full_name}
+                {profileData.profile.is_verified && ' ✓'}
+              </p>
               <div className="profile-stats">
                 <div className="stat-item">
-                  <span className="stat-number">{profileData.totalPosts}</span>
+                  <span className="stat-number">{profileData.stats.postsCount}</span>
                   <span className="stat-label">Posts</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-number">{profileData.totalFollowers}k</span>
+                  <span className="stat-number">
+                    {profileData.stats.followersCount > 1000000 
+                      ? `${(profileData.stats.followersCount / 1000000).toFixed(1)}M` 
+                      : profileData.stats.followersCount > 1000 
+                      ? `${(profileData.stats.followersCount / 1000).toFixed(1)}K` 
+                      : profileData.stats.followersCount}
+                  </span>
                   <span className="stat-label">Followers</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-number">{profileData.totalFollowing}</span>
+                  <span className="stat-number">{profileData.stats.followingCount}</span>
                   <span className="stat-label">Following</span>
                 </div>
               </div>
@@ -90,9 +188,8 @@ const Dashboard = () => {
                 </svg>
               </div>
               <div className="kpi-content">
-                <span className="kpi-value">{profileData.averageLikes}</span>
+                <span className="kpi-value">{engagement?.avg_likes.toLocaleString() || '0'}</span>
                 <span className="kpi-label">Avg Likes</span>
-                <span className="kpi-trend">↗ {profileData.growthRate}%</span>
               </div>
             </div>
             
@@ -103,9 +200,8 @@ const Dashboard = () => {
                 </svg>
               </div>
               <div className="kpi-content">
-                <span className="kpi-value">52</span>
+                <span className="kpi-value">{engagement?.avg_comments || '0'}</span>
                 <span className="kpi-label">Avg Comments</span>
-                <span className="kpi-trend">↗ 8%</span>
               </div>
             </div>
             
@@ -116,9 +212,8 @@ const Dashboard = () => {
                 </svg>
               </div>
               <div className="kpi-content">
-                <span className="kpi-value">6.2%</span>
+                <span className="kpi-value">{engagement?.engagement_rate || '0'}%</span>
                 <span className="kpi-label">Engagement</span>
-                <span className="kpi-trend">↗ 2%</span>
               </div>
             </div>
           </div>
@@ -156,62 +251,139 @@ const Dashboard = () => {
         <div className="content-display">
           <div className="content-header">
             <div className="content-filters">
-              <button className="filter-btn active">Posts</button>
-              <button className="filter-btn">Reels</button>
-            </div>
-            <div className="content-actions">
-              <button className="action-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
-                </svg>
+              <button 
+                className={`filter-btn ${contentType === 'posts' ? 'active' : ''}`}
+                onClick={() => setContentType('posts')}
+              >
+                Posts ({posts.length})
+              </button>
+              <button 
+                className={`filter-btn ${contentType === 'reels' ? 'active' : ''}`}
+                onClick={() => setContentType('reels')}
+              >
+                Reels ({reels.length})
               </button>
             </div>
           </div>
           <div className="content-grid">
-            {Array.from({length: 12}, (_, i) => (
-              <div key={i} className="content-card">
-                <div className="card-media">
-                  <div className="media-placeholder">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="18" height="18" x="3" y="3" rx="2"/>
-                      <circle cx="9" cy="9" r="2"/>
-                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
-                    </svg>
-                  </div>
-                  <div className="media-overlay">
-                    <div className="engagement-stats">
-                      <span className="stat">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
-                        </svg>
-                        {Math.floor(Math.random() * 1000) + 100}
-                      </span>
-                      <span className="stat">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                        </svg>
-                        {Math.floor(Math.random() * 100) + 10}
-                      </span>
+            {contentType === 'posts' ? (
+              posts.length > 0 ? (
+                posts.map((post, i) => (
+                  <div key={post.post_id || i} className="content-card">
+                    <div className="card-media">
+                      {post.image_url ? (
+                        <>
+                          <img 
+                            src={post.image_url} 
+                            alt="Post"
+                            onError={(e) => {
+                              console.error('Failed to load post image:', post.image_url);
+                              e.target.style.display = 'none';
+                              e.target.nextElementSibling.style.display = 'flex';
+                            }}
+                          />
+                          <div className="media-placeholder" style={{ display: 'none' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <rect width="18" height="18" x="3" y="3" rx="2"/>
+                              <circle cx="9" cy="9" r="2"/>
+                              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                            </svg>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="media-placeholder">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <rect width="18" height="18" x="3" y="3" rx="2"/>
+                            <circle cx="9" cy="9" r="2"/>
+                            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                          </svg>
+                        </div>
+                      )}
+                      <div className="media-overlay">
+                        <div className="engagement-stats">
+                          <span className="stat">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
+                            </svg>
+                            {post.likes_count?.toLocaleString() || 0}
+                          </span>
+                          <span className="stat">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            {post.comments_count || 0}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="card-content">
+                      <p className="content-caption">
+                        {post.caption ? post.caption.substring(0, 50) + '...' : 'No caption'}
+                      </p>
                     </div>
                   </div>
-                </div>
-                <div className="card-content">
-                  <div className="content-meta">
-                    <span className="content-tag">#{['food', 'travel', 'lifestyle', 'aesthetic'][Math.floor(Math.random() * 4)]}</span>
-                    <span className="content-vibe">{['Casual', 'Luxury', 'Energetic'][Math.floor(Math.random() * 3)]}</span>
-                  </div>
-                  <div className="content-performance">
-                    <div className="performance-bar">
-                      <div 
-                        className="performance-fill" 
-                        style={{ width: `${Math.floor(Math.random() * 40) + 60}%` }}
-                      ></div>
+                ))
+              ) : (
+                <div className="no-content">No posts found</div>
+              )
+            ) : (
+              reels.length > 0 ? (
+                reels.map((reel, i) => (
+                  <div key={reel.reel_id || i} className="content-card">
+                    <div className="card-media">
+                      {reel.thumbnail_url ? (
+                        <>
+                          <img 
+                            src={reel.thumbnail_url} 
+                            alt="Reel"
+                            onError={(e) => {
+                              console.error('Failed to load reel thumbnail:', reel.thumbnail_url);
+                              e.target.style.display = 'none';
+                              e.target.nextElementSibling.style.display = 'flex';
+                            }}
+                          />
+                          <div className="media-placeholder" style={{ display: 'none' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="media-placeholder">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                          </svg>
+                        </div>
+                      )}
+                      <div className="media-overlay">
+                        <div className="engagement-stats">
+                          <span className="stat">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                              <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                            {reel.views_count?.toLocaleString() || 0}
+                          </span>
+                          <span className="stat">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
+                            </svg>
+                            {reel.likes_count?.toLocaleString() || 0}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="performance-score">{Math.floor(Math.random() * 40) + 60}%</span>
+                    <div className="card-content">
+                      <p className="content-caption">
+                        {reel.caption ? reel.caption.substring(0, 50) + '...' : 'No caption'}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                ))
+              ) : (
+                <div className="no-content">No reels found</div>
+              )
+            )}
           </div>
         </div>
       ) : (
@@ -219,22 +391,36 @@ const Dashboard = () => {
           {/* Analytics Navigation */}
           <div className="analytics-nav">
             <div className="analytics-pills">
-              {sections.map(section => (
-                <button
-                  key={section.id}
-                  className={`analytics-pill ${activeSection === section.id ? 'active' : ''}`}
-                  onClick={() => setActiveSection(section.id)}
-                >
-                  {section.name}
-                </button>
-              ))}
+              <button
+                className={`analytics-pill ${activeSection === 'engagement' ? 'active' : ''}`}
+                onClick={() => setActiveSection('engagement')}
+              >
+                Engagement Performance
+              </button>
+              <button
+                className={`analytics-pill ${activeSection === 'content' ? 'active' : ''}`}
+                onClick={() => setActiveSection('content')}
+              >
+                Content Analysis
+              </button>
+              <button
+                className={`analytics-pill ${activeSection === 'performance' ? 'active' : ''}`}
+                onClick={() => setActiveSection('performance')}
+              >
+                Performance Insights
+              </button>
             </div>
           </div>
 
           {/* Analytics Display Area */}
           <div className="analytics-display">
-            {activeSection === 'overview' && (
+            {/* 1. ENGAGEMENT PERFORMANCE CHARTS */}
+            {activeSection === 'engagement' && (
               <div className="analytics-content">
+                <div className="section-header">
+                  <h2>📊 Engagement Performance</h2>
+                  <p>Track your engagement metrics over time</p>
+                </div>
                 <div className="chart-row">
                   <div className="chart-container">
                     <h3>Engagement Over Time</h3>
@@ -257,7 +443,7 @@ const Dashboard = () => {
                     </ResponsiveContainer>
                   </div>
                   <div className="chart-container">
-                    <h3>Likes vs Comments</h3>
+                    <h3>Likes vs Comments Breakdown</h3>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={engagementData.likesVsComments}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
@@ -280,31 +466,13 @@ const Dashboard = () => {
               </div>
             )}
 
-        {activeSection === 'performance' && (
-          <div className="analytics-content">
-            <div className="chart-row">
-              <div className="chart-container">
-                <h3>Performance Metrics</h3>
-                <div className="performance-chart">
-                  <div className="chart-placeholder">
-                    Performance analytics and trends
-                  </div>
-                </div>
-              </div>
-              <div className="chart-container">
-                <h3>Growth Analysis</h3>
-                <div className="growth-chart">
-                  <div className="chart-placeholder">
-                    Growth metrics and projections
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
+            {/* 2. CONTENT ANALYSIS CHARTS */}
             {activeSection === 'content' && (
               <div className="analytics-content">
+                <div className="section-header">
+                  <h2>🎨 Content Analysis</h2>
+                  <p>AI-powered insights into your content categories and vibes</p>
+                </div>
                 <div className="chart-row">
                   <div className="chart-container">
                     <h3>Content Categories</h3>
@@ -368,38 +536,15 @@ const Dashboard = () => {
                 <div className="chart-row">
                   <div className="chart-container full-width">
                     <h3>Top Content Tags</h3>
-                    <div className="tags-container">
-                      {contentAnalysisData.topContentTags.map((tag, index) => (
-                        <div key={tag.tag} className="tag-item">
-                          <span className="tag-name">{tag.tag}</span>
-                          <div className="tag-bar">
-                            <div 
-                              className="tag-fill" 
-                              style={{ 
-                                width: `${(tag.count / Math.max(...contentAnalysisData.topContentTags.map(t => t.count))) * 100}%`,
-                                background: `linear-gradient(90deg, ${['#9D4EDD', '#FF3CAC', '#00F5D4', '#FF8E3C', '#A7F432'][index % 5]} 0%, ${['#FF3CAC', '#9D4EDD', '#FF8E3C', '#00F5D4', '#A7F432'][index % 5]} 100%)`
-                              }}
-                            ></div>
-                          </div>
-                          <span className="tag-count">{tag.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeSection === 'quality' && (
-              <div className="analytics-content">
-                <div className="chart-row">
-                  <div className="chart-container">
-                    <h3>Post Quality vs Engagement</h3>
                     <ResponsiveContainer width="100%" height={300}>
-                      <ScatterChart data={performanceData.qualityVsEngagement}>
+                      <BarChart 
+                        data={contentAnalysisData.topContentTags} 
+                        layout="vertical"
+                        margin={{ left: 80 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
-                        <XAxis type="number" dataKey="quality" name="Quality" stroke="#B0B0B0" />
-                        <YAxis type="number" dataKey="engagement" name="Engagement" stroke="#B0B0B0" />
+                        <XAxis type="number" stroke="#B0B0B0" />
+                        <YAxis dataKey="tag" type="category" stroke="#B0B0B0" />
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#1A1A1A', 
@@ -407,7 +552,42 @@ const Dashboard = () => {
                             borderRadius: '8px',
                             color: '#F5F5F5'
                           }} 
-                          formatter={(value, name) => [value, name === 'quality' ? 'Quality Score' : 'Engagement']}
+                        />
+                        <Bar dataKey="count" fill="#FF3CAC" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3. PERFORMANCE INSIGHTS CHARTS */}
+            {activeSection === 'performance' && (
+              <div className="analytics-content">
+                <div className="section-header">
+                  <h2>⚡ Performance Insights</h2>
+                  <p>Analyze the relationship between quality and engagement</p>
+                </div>
+                <div className="chart-row">
+                  <div className="chart-container">
+                    <h3>Post Quality vs Engagement</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <ScatterChart data={performanceData.qualityVsEngagement}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
+                        <XAxis type="number" dataKey="quality" name="Quality Score" stroke="#B0B0B0" domain={[0, 100]} />
+                        <YAxis type="number" dataKey="engagement" name="Total Engagement" stroke="#B0B0B0" />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#1A1A1A', 
+                            border: '1px solid #121212', 
+                            borderRadius: '8px',
+                            color: '#F5F5F5'
+                          }} 
+                          formatter={(value, name) => {
+                            if (name === 'quality') return [value, 'Quality Score'];
+                            if (name === 'engagement') return [value, 'Total Engagement'];
+                            return [value, name];
+                          }}
                         />
                         <Scatter dataKey="engagement" fill="#FF3CAC" />
                       </ScatterChart>

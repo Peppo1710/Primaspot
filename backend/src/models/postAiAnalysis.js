@@ -1,39 +1,56 @@
 const mongoose = require('mongoose');
 
 const postAiAnalysisSchema = new mongoose.Schema({
-  post_id: {
+  username: {
+    type: String,
+    required: true,
+    lowercase: true,
+    maxlength: 100,
+    index: true
+  },
+  profile_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Post',
+    ref: 'Profile',
     required: true,
     index: true
   },
-  content_categories: {
-    type: [String],
-    default: []
-  },
-  vibe_classification: {
-    type: String,
-    maxlength: 50
-  },
-  quality_score: {
+  analytics: [{
+    post_id: {
+      type: String,
+      required: true
+    },
+    content_categories: {
+      type: [String],
+      default: []
+    },
+    vibe_classification: {
+      type: String,
+      maxlength: 50
+    },
+    quality_score: {
+      type: Number,
+      default: 0
+    },
+    lighting_score: {
+      type: Number,
+      default: 0
+    },
+    visual_appeal_score: {
+      type: Number,
+      default: 0
+    },
+    consistency_score: {
+      type: Number,
+      default: 0
+    },
+    keywords: {
+      type: [String],
+      default: []
+    }
+  }],
+  total_analyzed: {
     type: Number,
     default: 0
-  },
-  lighting_score: {
-    type: Number,
-    default: 0
-  },
-  visual_appeal_score: {
-    type: Number,
-    default: 0
-  },
-  consistency_score: {
-    type: Number,
-    default: 0
-  },
-  keywords: {
-    type: [String],
-    default: []
   },
   analyzed_at: {
     type: Date,

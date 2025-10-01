@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Searchpage.css';
+import { setGlobalUsername } from '../store/globalStore';
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchStatus, setSearchStatus] = useState(null); // 'success', 'error', or null
-  const [username, setUsername] = useState('');
+  const [showLoader, setShowLoader] = useState(false);
   const navigate = useNavigate();
 
   // Enhanced mock dataset with more realistic data
@@ -71,7 +72,6 @@ export default function SearchPage() {
     setSearchStatus(null);
     
     try {
-      // Use the actual API endpoint
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
       const response = await fetch(`${backendUrl}/api/user/validate/${query}`, {
         method: 'GET',
@@ -83,30 +83,32 @@ export default function SearchPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setResults(mockData); // Use mock data for display
           setSearchStatus('success');
-          // Navigate to dashboard after successful search
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 1500);
+          setGlobalUsername(query.trim().toLowerCase());
+          // Don't navigate yet, wait for user to click "Go" button
         } else {
-          setResults([]);
           setSearchStatus('error');
         }
       } else if (response.status === 404) {
-        setResults([]);
         setSearchStatus('error');
       } else {
-        setResults([]);
         setSearchStatus('error');
       }
     } catch (error) {
       console.error('API Error:', error);
-      setResults([]);
       setSearchStatus('error');
     }
     
     setIsSearching(false);
+  };
+
+  const handleGoToDashboard = () => {
+    // Show 5-second loader before navigating
+    setShowLoader(true);
+    setTimeout(() => {
+      setShowLoader(false);
+      navigate('/dashboard');
+    }, 5000);
   };
 
   const handleClear = () => {
@@ -115,11 +117,18 @@ export default function SearchPage() {
     setSearchStatus(null);
   };
 
-
- 
-
   return (
     <div className="search-container">
+      {/* 5-Second Loader Animation */}
+      {showLoader && (
+        <div className="loader-overlay">
+          <div className="loader-content">
+            <div className="loader-spinner"></div>
+            <h2>Fetching Instagram Data...</h2>
+            <p>Analyzing @{query} profile and content</p>
+          </div>
+        </div>
+      )}
       {/* Navigation */}
       <nav className="nav-bar">
         <div className="nav-content">
@@ -166,13 +175,10 @@ export default function SearchPage() {
               <input
                 type="text"
                 value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setUsername(e.target.value);
-                }}
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder="Enter Instagram username to search analytics..."
                 className="search-input"
-                disabled={isSearching}
+                disabled={isSearching || showLoader}
               />
               
               {query && (
@@ -188,34 +194,41 @@ export default function SearchPage() {
                 </button>
               )}
               
-              <button
-                type="submit"
-                className={`search-button ${searchStatus === 'success' ? 'search-button-success' : ''}`}
-                disabled={isSearching || !query.trim()}
-              >
-                {isSearching ? (
-                  <div className="loading-spinner"></div>
-                ) : searchStatus === 'success' ? (
-                  <>
-                    <span>Go to Dashboard</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="m9 18 6-6-6-6"/>
-                    </svg>
-                  </>
-                ) : (
-                  <>
-                    <span>Search</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="m9 18 6-6-6-6"/>
-                    </svg>
-                  </>
-                )}
-              </button>
+              {searchStatus === 'success' ? (
+                <button
+                  type="button"
+                  onClick={handleGoToDashboard}
+                  className="search-button search-button-success"
+                  disabled={showLoader}
+                >
+                  <span>Go</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m9 18 6-6-6-6"/>
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="search-button"
+                  disabled={isSearching || !query.trim() || showLoader}
+                >
+                  {isSearching ? (
+                    <div className="loading-spinner"></div>
+                  ) : (
+                    <>
+                      <span>Search</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="m9 18 6-6-6-6"/>
+                      </svg>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </form>
 
-          {/* Search Status Indicator - Positioned in visible area */}
-          {searchStatus && (
+          {/* Search Status Indicator */}
+          {searchStatus && !showLoader && (
             <div className="search-status">
               {searchStatus === 'success' ? (
                 <div className="status-success">
@@ -227,8 +240,8 @@ export default function SearchPage() {
                       </svg>
                     </div>
                     <div className="success-text">
-                      <h3>Search Successful!</h3>
-                      <p>Found {results.length} result{results.length !== 1 ? 's' : ''} for your query.</p>
+                      <h3>User Found!</h3>
+                      <p>Loading dashboard for @{query}...</p>
                     </div>
                   </div>
                 </div>
@@ -243,8 +256,8 @@ export default function SearchPage() {
                       </svg>
                     </div>
                     <div className="error-text">
-                      <h3>No Results Found</h3>
-                      <p>We couldn't find anything matching your search. Try different keywords or check your spelling.</p>
+                      <h3>User Not Found</h3>
+                      <p>Instagram username @{query} not found. Please check the username and try again.</p>
                     </div>
                   </div>
                 </div>
@@ -254,64 +267,6 @@ export default function SearchPage() {
 
         </div>
       </main>
-
-      {/* Results Section */}
-      {results.length > 0 && (
-        <section className="results-section">
-          <div className="results-header">
-            <h2 className="results-title">
-              Found {results.length} result{results.length !== 1 ? 's' : ''}
-            </h2>
-            <p className="results-subtitle">for "{query}"</p>
-          </div>
-
-          <div className="results-grid">
-            {results.map((result) => (
-              <article key={result.id} className="result-card">
-                <div className="result-header">
-                  <div className="result-type">
-                    <span className="type-icon">{getTypeIcon(result.type)}</span>
-                    <span 
-                      className="type-label"
-                      style={{ color: getTypeColor(result.type) }}
-                    >
-                      {result.type}
-                    </span>
-                  </div>
-                  <time className="result-date">{result.date}</time>
-                </div>
-
-                <h3 className="result-title">{result.title}</h3>
-                <p className="result-snippet">{result.snippet}</p>
-
-                <div className="result-metrics">
-                  <div className="metric">
-                    <span className="metric-icon">❤️</span>
-                    <span className="metric-value">{result.metrics.likes.toLocaleString()}</span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-icon">💬</span>
-                    <span className="metric-value">{result.metrics.comments}</span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-icon">🔄</span>
-                    <span className="metric-value">{result.metrics.shares}</span>
-                  </div>
-                </div>
-
-                <div className="result-tags">
-                  {result.tags.map((tag) => (
-                    <span key={tag} className="result-tag">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-
     </div>
   );
 }

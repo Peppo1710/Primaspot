@@ -89,27 +89,83 @@ class DatabaseService {
     try {
       const { limit = 20, skip = 0, sortBy = 'createdAt' } = options;
       
-      // Convert sortBy to MongoDB format
-      let sortField = sortBy.replace('-', '');
-      let sortOrder = sortBy.startsWith('-') ? -1 : 1;
-      
-      // Handle special field mappings
-      if (sortField === 'created_at') sortField = 'createdAt';
-      if (sortField === 'likes_count') sortField = 'likes_count';
-      if (sortField === 'comments_count') sortField = 'comments_count';
-      
-      const posts = await db.Post
-        .find({ profile_id: userId })
-        .populate('PostAiAnalysis')
-        .sort({ [sortField]: sortOrder })
-        .skip(skip)
-        .limit(limit)
+      // Get user's posts document
+      const userPostsDoc = await db.Post
+        .findOne({ profile_id: userId })
         .lean();
       
-      return posts;
+      if (!userPostsDoc || !userPostsDoc.posts) {
+        return [];
+      }
+      
+      // Sort posts array
+      let sortedPosts = [...userPostsDoc.posts];
+      
+      if (sortBy === 'createdAt' || sortBy === '-createdAt') {
+        sortedPosts.sort((a, b) => {
+          const dateA = new Date(a.post_date || 0);
+          const dateB = new Date(b.post_date || 0);
+          return sortBy.startsWith('-') ? dateB - dateA : dateA - dateB;
+        });
+      } else if (sortBy === 'likes_count' || sortBy === '-likes_count') {
+        sortedPosts.sort((a, b) => {
+          return sortBy.startsWith('-') ? b.likes_count - a.likes_count : a.likes_count - b.likes_count;
+        });
+      } else if (sortBy === 'comments_count' || sortBy === '-comments_count') {
+        sortedPosts.sort((a, b) => {
+          return sortBy.startsWith('-') ? b.comments_count - a.comments_count : a.comments_count - b.comments_count;
+        });
+      }
+      
+      // Apply pagination
+      const paginatedPosts = sortedPosts.slice(skip, skip + limit);
+      
+      return paginatedPosts;
     } catch (error) {
       this.logger.error('Error in getUserPosts:', error);
       throw new ApiError(500, 'Database error while retrieving user posts');
+    }
+  }
+
+  async getUserReels(userId, options = {}) {
+    try {
+      const { limit = 20, skip = 0, sortBy = 'createdAt' } = options;
+      
+      // Get user's reels document
+      const userReelsDoc = await db.Reel
+        .findOne({ profile_id: userId })
+        .lean();
+      
+      if (!userReelsDoc || !userReelsDoc.reels) {
+        return [];
+      }
+      
+      // Sort reels array
+      let sortedReels = [...userReelsDoc.reels];
+      
+      if (sortBy === 'createdAt' || sortBy === '-createdAt') {
+        sortedReels.sort((a, b) => {
+          const dateA = new Date(a.post_date || 0);
+          const dateB = new Date(b.post_date || 0);
+          return sortBy.startsWith('-') ? dateB - dateA : dateA - dateB;
+        });
+      } else if (sortBy === 'likes_count' || sortBy === '-likes_count') {
+        sortedReels.sort((a, b) => {
+          return sortBy.startsWith('-') ? b.likes_count - a.likes_count : a.likes_count - b.likes_count;
+        });
+      } else if (sortBy === 'views_count' || sortBy === '-views_count') {
+        sortedReels.sort((a, b) => {
+          return sortBy.startsWith('-') ? b.views_count - a.views_count : a.views_count - b.views_count;
+        });
+      }
+      
+      // Apply pagination
+      const paginatedReels = sortedReels.slice(skip, skip + limit);
+      
+      return paginatedReels;
+    } catch (error) {
+      this.logger.error('Error in getUserReels:', error);
+      throw new ApiError(500, 'Database error while retrieving user reels');
     }
   }
 
@@ -191,6 +247,10 @@ class DatabaseService {
         username: profileData.instagram_username.toLowerCase(),
         full_name: profileData.profile?.full_name || '',
         profile_picture_url: profileData.profile?.profile_pic_url || '',
+        bio_text: profileData.profile?.biography || '',
+        website_url: profileData.profile?.external_url || '',
+        is_verified: profileData.profile?.is_verified || false,
+        account_type: profileData.profile?.is_business ? 'business' : 'personal',
         followers_count: profileData.profile?.followers || 0,
         following_count: profileData.profile?.following || 0,
         posts_count: profileData.profile?.posts_count || 0,
@@ -214,80 +274,86 @@ class DatabaseService {
     }
   }
 
-  async savePosts(userId, posts) {
+  async savePosts(userId, posts, username) {
     try {
-      const savedPosts = [];
-      
-      for (const postData of posts) {
-        const filter = { post_id: postData.instagram_post_id };
-        
-        const update = {
-          profile_id: userId,
-          post_id: postData.instagram_post_id,
-          post_url: postData.url || `https://instagram.com/p/${postData.shortcode}`,
-          image_url: postData.display_url,
-          video_url: postData.video_url,
-          caption: postData.caption,
-          likes_count: postData.likes,
-          comments_count: postData.comments,
-          post_date: postData.instagram_data?.taken_at || new Date(),
-          post_type: postData.media_type,
-          hashtags: postData.hashtags || [],
-          scraped_at: new Date(),
-          updatedAt: new Date()
-        };
+      // Transform posts data to new format
+      const postsArray = posts.map(postData => ({
+        post_id: postData.instagram_post_id,
+        post_url: postData.url || `https://instagram.com/p/${postData.shortcode}`,
+        image_url: postData.display_url,
+        video_url: postData.video_url,
+        caption: postData.caption,
+        likes_count: postData.likes,
+        comments_count: postData.comments,
+        post_date: postData.instagram_data?.taken_at || new Date(),
+        post_type: postData.media_type,
+        hashtags: postData.hashtags || []
+      }));
 
-        const post = await db.Post.findOneAndUpdate(
-          filter,
-          update,
-          { upsert: true, new: true }
-        ).lean();
+      // Find or create user's posts document
+      const filter = { profile_id: userId };
+      const update = {
+        username: username.toLowerCase(),
+        profile_id: userId,
+        posts: postsArray,
+        total_posts: postsArray.length,
+        scraped_at: new Date(),
+        updatedAt: new Date()
+      };
 
-        savedPosts.push(post);
-      }
+      const userPostsDoc = await db.Post.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: true, new: true }
+      ).lean();
 
-      return savedPosts;
+      return userPostsDoc;
     } catch (error) {
       this.logger.error('Error in savePosts:', error);
       throw new ApiError(500, 'Database error while saving posts');
     }
   }
 
-  async saveReels(profileId, reels) {
+  async saveReels(profileId, reels, username) {
     try {
       if (!reels || reels.length === 0) {
         this.logger.info('No reels to save');
-        return [];
+        return null;
       }
 
-      const savedReels = [];
-      for (const reel of reels) {
-        const reelData = {
-          profile_id: profileId,
-          reel_id: reel.id || reel.shortcode,
-          reel_url: reel.url || `https://instagram.com/reel/${reel.shortcode}`,
-          thumbnail_url: reel.thumbnail_url || reel.display_url,
-          video_url: reel.video_url,
-          caption: reel.caption,
-          views_count: reel.views_count || 0,
-          likes_count: reel.likes_count || 0,
-          comments_count: reel.comments_count || 0,
-          post_date: reel.post_date || new Date(),
-          duration_seconds: reel.duration_seconds || 0,
-          scraped_at: new Date()
-        };
+      // Transform reels data to new format
+      const reelsArray = reels.map(reel => ({
+        reel_id: reel.instagram_post_id || reel.shortcode,
+        reel_url: reel.url || `https://instagram.com/reel/${reel.shortcode}`,
+        thumbnail_url: reel.thumbnail_url || reel.display_url,
+        video_url: reel.video_url,
+        caption: reel.caption,
+        views_count: reel.views || reel.views_count || 0,
+        likes_count: reel.likes || reel.likes_count || 0,
+        comments_count: reel.comments || reel.comments_count || 0,
+        post_date: reel.instagram_data?.taken_at || reel.post_date || new Date(),
+        duration_seconds: reel.duration || reel.duration_seconds || 0
+      }));
 
-        const savedReel = await db.Reel.findOneAndUpdate(
-          { reel_id: reelData.reel_id },
-          reelData,
-          { upsert: true, new: true }
-        );
+      // Find or create user's reels document
+      const filter = { profile_id: profileId };
+      const update = {
+        username: username.toLowerCase(),
+        profile_id: profileId,
+        reels: reelsArray,
+        total_reels: reelsArray.length,
+        scraped_at: new Date(),
+        updatedAt: new Date()
+      };
 
-        savedReels.push(savedReel);
-      }
+      const userReelsDoc = await db.Reel.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: true, new: true }
+      ).lean();
 
-      this.logger.info(`Saved ${savedReels.length} reels for profile ${profileId}`);
-      return savedReels;
+      this.logger.info(`Saved ${reelsArray.length} reels for profile ${profileId}`);
+      return userReelsDoc;
     } catch (error) {
       this.logger.error('Error in saveReels:', error);
       throw new ApiError(500, 'Database error while saving reels');
@@ -344,6 +410,69 @@ class DatabaseService {
     } catch (error) {
       this.logger.error('Error in saveRawInstagramRows:', error);
       throw new ApiError(500, 'Database error while saving raw Instagram data');
+    }
+  }
+
+  async getPostAnalytics(userId) {
+    try {
+      const analyticsDoc = await db.PostAiAnalysis
+        .findOne({ profile_id: userId })
+        .lean();
+      
+      if (!analyticsDoc || !analyticsDoc.analytics) {
+        return [];
+      }
+      
+      return analyticsDoc.analytics;
+    } catch (error) {
+      this.logger.error('Error in getPostAnalytics:', error);
+      throw new ApiError(500, 'Database error while retrieving post analytics');
+    }
+  }
+
+  async savePostAnalytics(posts, mlData, userId, username) {
+    try {
+      // Transform analytics data to new format
+      const analyticsArray = [];
+      
+      for (let i = 0; i < posts.length && i < mlData.length; i++) {
+        const post = posts[i];
+        const analysis = mlData[i];
+        
+        analyticsArray.push({
+          post_id: post.post_id,
+          content_categories: analysis.keywords || [],
+          vibe_classification: Array.isArray(analysis.vibe) ? analysis.vibe.join(', ') : (analysis.vibe || ''),
+          quality_score: analysis.quality?.visual_appeal || 0,
+          lighting_score: analysis.quality?.lighting === 'good' ? 8 : (analysis.quality?.lighting === 'underexposed' ? 4 : 6),
+          visual_appeal_score: analysis.quality?.visual_appeal || 0,
+          consistency_score: analysis.quality?.consistency || 0,
+          keywords: analysis.keywords || []
+        });
+      }
+
+      // Find or create user's analytics document
+      const filter = { profile_id: userId };
+      const update = {
+        username: username.toLowerCase(),
+        profile_id: userId,
+        analytics: analyticsArray,
+        total_analyzed: analyticsArray.length,
+        analyzed_at: new Date(),
+        updatedAt: new Date()
+      };
+
+      const userAnalyticsDoc = await db.PostAiAnalysis.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: true, new: true }
+      ).lean();
+
+      this.logger.info(`Saved analytics for ${analyticsArray.length} posts`);
+      return userAnalyticsDoc;
+    } catch (error) {
+      this.logger.error('Error in savePostAnalytics:', error);
+      throw new ApiError(500, 'Database error while saving post analytics');
     }
   }
 }

@@ -1,50 +1,59 @@
 const mongoose = require('mongoose');
 
 const reelsSchema = new mongoose.Schema({
+  username: {
+    type: String,
+    required: true,
+    lowercase: true,
+    maxlength: 100,
+    index: true
+  },
   profile_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Profile',
     required: true,
     index: true
   },
-  reel_id: {
-    type: String,
-    required: true,
-    unique: true,
-    maxlength: 50,
-    index: true
-  },
-  reel_url: {
-    type: String,
-    required: true
-  },
-  thumbnail_url: {
-    type: String
-  },
-  video_url: {
-    type: String
-  },
-  caption: {
-    type: String
-  },
-  views_count: {
-    type: Number,
-    default: 0,
-    index: true
-  },
-  likes_count: {
-    type: Number,
-    default: 0
-  },
-  comments_count: {
-    type: Number,
-    default: 0
-  },
-  post_date: {
-    type: Date,
-    index: true
-  },
-  duration_seconds: {
+  reels: [{
+    reel_id: {
+      type: String,
+      required: true,
+      maxlength: 50
+    },
+    reel_url: {
+      type: String,
+      required: true
+    },
+    thumbnail_url: {
+      type: String
+    },
+    video_url: {
+      type: String
+    },
+    caption: {
+      type: String
+    },
+    views_count: {
+      type: Number,
+      default: 0
+    },
+    likes_count: {
+      type: Number,
+      default: 0
+    },
+    comments_count: {
+      type: Number,
+      default: 0
+    },
+    post_date: {
+      type: Date
+    },
+    duration_seconds: {
+      type: Number,
+      default: 0
+    }
+  }],
+  total_reels: {
     type: Number,
     default: 0
   },

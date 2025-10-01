@@ -1,0 +1,11 @@
+# Ignore all downloaded images
+profiles/*
+posts/*
+reels/*
+
+# Keep the directory structure
+!profiles/.gitkeep
+!posts/.gitkeep
+!reels/.gitkeep
+!.gitkeep
+

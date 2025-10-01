@@ -1,53 +1,62 @@
 const mongoose = require('mongoose');
 
 const postsSchema = new mongoose.Schema({
+  username: {
+    type: String,
+    required: true,
+    lowercase: true,
+    maxlength: 100,
+    index: true
+  },
   profile_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Profile',
     required: true,
     index: true
   },
-  post_id: {
-    type: String,
-    required: true,
-    unique: true,
-    maxlength: 50,
-    index: true
-  },
-  post_url: {
-    type: String,
-    required: true
-  },
-  image_url: {
-    type: String
-  },
-  video_url: {
-    type: String
-  },
-  caption: {
-    type: String
-  },
-  likes_count: {
-    type: Number,
-    default: 0,
-    index: true
-  },
-  comments_count: {
+  posts: [{
+    post_id: {
+      type: String,
+      required: true,
+      maxlength: 50
+    },
+    post_url: {
+      type: String,
+      required: true
+    },
+    image_url: {
+      type: String
+    },
+    video_url: {
+      type: String
+    },
+    caption: {
+      type: String
+    },
+    likes_count: {
+      type: Number,
+      default: 0
+    },
+    comments_count: {
+      type: Number,
+      default: 0
+    },
+    post_date: {
+      type: Date
+    },
+    post_type: {
+      type: String,
+      enum: ['photo', 'video', 'carousel'],
+      default: 'photo'
+    },
+    hashtags: {
+      type: [String],
+      default: []
+    }
+  }],
+  total_posts: {
     type: Number,
     default: 0
-  },
-  post_date: {
-    type: Date,
-    index: true
-  },
-  post_type: {
-    type: String,
-    enum: ['photo', 'video', 'carousel'],
-    default: 'photo'
-  },
-  hashtags: {
-    type: [String],
-    default: []
   },
   scraped_at: {
     type: Date,

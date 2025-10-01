@@ -13,6 +13,7 @@ const dbConnection = require('./config/database');
 
 // Import routes
 const userRoutes = require('./src/routes/userRoutes');
+const imageProxyRoutes = require('./src/routes/imageProxy');
 
 const app = express();
 const port = process.env.PORT || 8000;
@@ -108,6 +109,9 @@ app.get('/api', (req, res) => {
 // Mount user routes
 app.use('/api/user', userRoutes);
 app.use('/api/users', userRoutes);
+
+// Mount image proxy route
+app.use('/api', imageProxyRoutes);
 
 // Apply Instagram rate limit to refresh endpoint
 app.use('/api/user/:username/refresh', instagramLimiter);

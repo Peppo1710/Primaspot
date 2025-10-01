@@ -1,3 +1,4 @@
+require('dotenv').config();
 const InstagramService = require('../services/InstagramService');
 const DatabaseService = require('../services/DatabaseService');
 const logger = require('../utils/logger');
@@ -15,6 +16,7 @@ class UserController {
     this.getUserReels = this.getUserReels.bind(this);
     this.getPostAnalytics = this.getPostAnalytics.bind(this);
     this.getReelAnalytics = this.getReelAnalytics.bind(this);
+    this.getUserEngagementMetrics = this.getUserEngagementMetrics.bind(this);
   }
 
   /**
@@ -109,10 +111,10 @@ class UserController {
       // Scrape complete user data from Instagram
       const instagramData = await this.instagramService.getCompleteUserData(username, 0);
       
-      // Store all data in database
+      // Store all data in database (images will be cached on frontend)
       const profile = await this.databaseService.upsertUser(instagramData.profile);
-      const savedPosts = await this.databaseService.savePosts(profile._id, instagramData.posts);
-      const savedReels = await this.databaseService.saveReels(profile._id, instagramData.reels);
+      const savedPosts = await this.databaseService.savePosts(profile._id, instagramData.posts, username);
+      const savedReels = await this.databaseService.saveReels(profile._id, instagramData.reels, username);
       const savedAnalytics = await this.databaseService.saveAnalytics(profile._id, instagramData.analytics);
       
       // Update scraping status
@@ -176,11 +178,18 @@ class UserController {
         message: `Profile data for @${username}`,
         data: {
           username: user.username,
-          profile: user.profile,
+          profile: {
+            full_name: user.full_name,
+            profile_picture_url: user.profile_picture_url,
+            bio_text: user.bio_text,
+            website_url: user.website_url,
+            is_verified: user.is_verified,
+            account_type: user.account_type
+          },
           stats: {
-            postsCount: user.profile?.posts_count || 0,
-            followersCount: user.profile?.followers_count || 0,
-            followingCount: user.profile?.following_count || 0,
+            postsCount: user.posts_count || 0,
+            followersCount: user.followers_count || 0,
+            followingCount: user.following_count || 0,
             lastScraped: user.scraped_at || user.updated_at
           }
         }
@@ -309,7 +318,7 @@ class UserController {
   }
 
   /**
-   * Get Post Analytics - Analyze post performance (placeholder for future implementation)
+   * Get Post Analytics - Analyze post performance using ML API
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    * @param {Function} next - Express next function
@@ -327,27 +336,118 @@ class UserController {
 
       logger.info(`Fetching post analytics for user: ${username}`);
 
-      // TODO: Implement post analytics
-      // This would include:
-      // - Photo analysis using AI/ML
-      // - Engagement analysis
-      // - Performance metrics
-      // - Content insights
+      const user = await this.databaseService.findUserByUsername(username);
 
-      return res.status(200).json({
-        success: true,
-        message: `Post analytics for @${username} (placeholder)`,
-        data: {
-          message: "Post analytics feature is under development",
-          features: [
-            "Photo analysis using AI/ML",
-            "Engagement analysis",
-            "Performance metrics",
-            "Content insights"
-          ],
-          status: "coming_soon"
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: `User @${username} not found in database`
+        });
+      }
+
+      // Get user posts
+      const posts = await this.databaseService.getUserPosts(user._id, { limit: 1000 });
+      
+      if (posts.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: `No posts found for @${username}`,
+          data: []
+        });
+      }
+
+      // Check if we already have analytics data for this user
+      const existingAnalytics = await this.databaseService.getPostAnalytics(user._id);
+      
+      if (existingAnalytics.length > 0) {
+        logger.info(`Found existing analytics for ${existingAnalytics.length} posts`);
+        return res.status(200).json({
+          success: true,
+          message: `Post analytics for @${username}`,
+          data: existingAnalytics
+        });
+      }
+
+      // No existing analytics, call ML API
+      logger.info(`No existing analytics found, calling ML API for ${posts.length} posts`);
+      
+      // Extract image URLs from posts
+      const imageUrls = posts
+        .filter(post => post.image_url)
+        .map(post => post.image_url);
+
+      if (imageUrls.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: `No images found in posts for @${username}`,
+          data: []
+        });
+      }
+
+      // Call ML API
+      const mlApiUrl = 'http://127.0.0.1:5000/analyze';
+      logger.info(`Calling ML API with ${imageUrls.length} image URLs:`, imageUrls);
+      
+      try {
+        const mlResponse = await fetch(mlApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ urls: imageUrls }),
+          timeout: 30000 // 30 second timeout
+        });
+
+        if (!mlResponse.ok) {
+          logger.error(`ML API error: ${mlResponse.status} ${mlResponse.statusText}`);
+          throw new Error(`ML API error: ${mlResponse.status} ${mlResponse.statusText}`);
         }
-      });
+
+        const mlData = await mlResponse.json();
+        logger.info(`ML API returned data:`, JSON.stringify(mlData, null, 2));
+
+        // Check if ML API returned valid data in the correct format
+        if (!mlData || !mlData.results || Object.keys(mlData.results).length === 0) {
+          logger.warn('ML API returned empty or invalid data');
+          return res.status(200).json({
+            success: true,
+            message: `ML API returned no analysis data for @${username}`,
+            data: {
+              message: "ML API returned empty data",
+              imageUrls: imageUrls,
+              mlResponse: mlData
+            }
+          });
+        }
+
+        // Convert ML API response format to array format
+        const analyticsArray = Object.values(mlData.results);
+        logger.info(`Converted ML data to array with ${analyticsArray.length} items`);
+
+        // Store analytics in database
+        const savedAnalytics = await this.databaseService.savePostAnalytics(posts, analyticsArray, user._id, username);
+        
+        return res.status(200).json({
+          success: true,
+          message: `Post analytics for @${username}`,
+          data: savedAnalytics
+        });
+
+      } catch (mlError) {
+        logger.error(`ML API call failed:`, mlError);
+        
+        // Return error response instead of throwing
+        return res.status(500).json({
+          success: false,
+          message: `Failed to analyze posts for @${username}`,
+          error: {
+            type: 'ML_API_ERROR',
+            message: mlError.message,
+            imageUrls: imageUrls,
+            mlApiUrl: mlApiUrl
+          }
+        });
+      }
 
     } catch (error) {
       logger.error(`Error fetching post analytics for ${req.params.username}:`, error);
@@ -398,6 +498,77 @@ class UserController {
 
     } catch (error) {
       logger.error(`Error fetching reel analytics for ${req.params.username}:`, error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get User Engagement Metrics - Simple metrics from posts and reels
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next function
+   */
+  async getUserEngagementMetrics(req, res, next) {
+    try {
+      const { username } = req.params;
+
+      if (!username) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username parameter is required'
+        });
+      }
+
+      logger.info(`Fetching engagement metrics for user: ${username}`);
+
+      const user = await this.databaseService.findUserByUsername(username);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: `User @${username} not found in database`
+        });
+      }
+
+      // Get all posts and reels for the user
+      const posts = await this.databaseService.getUserPosts(user._id, { limit: 1000 });
+      const reels = await this.databaseService.getUserReels(user._id, { limit: 1000 });
+
+      // Calculate metrics from posts
+      const postsTotalLikes = posts.reduce((sum, post) => sum + (post.likes_count || 0), 0);
+      const postsTotalComments = posts.reduce((sum, post) => sum + (post.comments_count || 0), 0);
+
+      // Calculate metrics from reels
+      const reelsTotalLikes = reels.reduce((sum, reel) => sum + (reel.likes_count || 0), 0);
+      const reelsTotalComments = reels.reduce((sum, reel) => sum + (reel.comments_count || 0), 0);
+
+      // Combined totals
+      const totalLikes = postsTotalLikes + reelsTotalLikes;
+      const totalComments = postsTotalComments + reelsTotalComments;
+      const totalContent = posts.length + reels.length;
+
+      // Calculate averages
+      const avgLikes = totalContent > 0 ? Math.round(totalLikes / totalContent) : 0;
+      const avgComments = totalContent > 0 ? Math.round(totalComments / totalContent) : 0;
+
+      // Calculate engagement rate
+      const totalEngagement = totalLikes + totalComments;
+      const engagementRate = user.followers_count > 0 && totalContent > 0
+        ? parseFloat(((totalEngagement / totalContent) / user.followers_count * 100).toFixed(2))
+        : 0;
+
+      return res.status(200).json({
+        success: true,
+        message: `Engagement metrics for @${username}`,
+        data: {
+          avg_likes: avgLikes,
+          avg_comments: avgComments,
+          engagement_rate: engagementRate
+        }
+      });
+
+    } catch (error) {
+      logger.error(`Error fetching engagement metrics for ${req.params.username}:`, error);
       next(error);
     }
   }

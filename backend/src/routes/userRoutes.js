@@ -129,6 +129,15 @@ router.get('/analytics/reels/:username', validateUsername, (req, res, next) => {
   userController.getReelAnalytics(req, res, next);
 });
 
+/**
+ * @route   GET /api/user/engagement/:username
+ * @desc    Get user engagement metrics (avg likes, avg comments, engagement rate)
+ * @access  Public
+ */
+router.get('/engagement/:username', validateUsername, (req, res, next) => {
+  userController.getUserEngagementMetrics(req, res, next);
+});
+
 // ========================================
 // LEGACY ROUTES (for backward compatibility)
 // ========================================

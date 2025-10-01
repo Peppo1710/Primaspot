@@ -4,6 +4,7 @@ import './App.css'
 import SearchPage from './pages/Searchpage'
 import Dashboard from './pages/Dashboard'
 
+
 function App() {
 
 
@@ -13,6 +14,7 @@ function App() {
         <Routes>
           <Route path="/" element={<SearchPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          
         </Routes>
       </BrowserRouter>
     </>
