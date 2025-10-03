@@ -1,28 +1,9 @@
-# Install command: pip install -r requirements.txt
-# Core Flask web framework
 Flask==3.0.0
-
-
-
-# Google GenAI SDK for Gemini API
 google-genai==0.8.0
-
-# Image processing and computer vision
 Pillow==10.1.0
 opencv-python-headless==4.8.1.78
 numpy==1.24.3
-
-# HTTP requests and file handling
 requests==2.31.0
-
-# Environment variable management
 python-dotenv==1.0.0
-
-# Type hints support (for Python < 3.9)
 typing-extensions==4.8.0
-
-# Optional: Flask CORS for cross-origin requests (if needed)
 Flask-Cors==4.0.0
-# Optional: Additional image processing libraries
-# scikit-image==0.21.0  # Uncomment if needed for advanced image processing
-# matplotlib==3.7.2     # Uncomment if needed for image visualization
