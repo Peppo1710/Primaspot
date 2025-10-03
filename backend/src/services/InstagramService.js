@@ -240,7 +240,17 @@ class InstagramService {
       const { posts, rawPostRows } = await this.getUserPosts(username, postLimit);
 
       // reels are posts that are video & duration > 0
+      logger.info(`Starting reel extraction from ${posts.length} posts`);
       const reels = this.extractReelsFromPosts(posts);
+      logger.info(`Reel extraction completed: ${reels.length} reels found`);
+      
+      // If no reels were found, try a more aggressive approach
+      if (reels.length === 0) {
+        logger.warn('No reels found with primary detection, trying fallback method');
+        const fallbackReels = this.extractReelsFallback(posts);
+        logger.info(`Fallback method found ${fallbackReels.length} additional reels`);
+        reels.push(...fallbackReels);
+      }
       
       // Upload reel media to Cloudinary with proper folder structure
       logger.info(`Uploading ${reels.length} reels to Cloudinary for @${username}`);
@@ -290,6 +300,7 @@ class InstagramService {
       // Save influencer (derived) optionally: we still return everything; controller or workers may create derived tables.
       // But we also return saved raw rows so caller can reference them.
       logger.info(`Successfully fetched complete data for @${username}: ${posts.length} posts, ${reels.length} reels`);
+      logger.info(`Classification summary: ${posts.length - reels.length} regular posts, ${reels.length} reels`);
       logger.warn(`API LIMITATION: Only ${posts.length} posts available out of ${profile.profile.posts_count} total posts`);
 
       return {
@@ -361,10 +372,19 @@ class InstagramService {
 
   transformPostData(node) {
     try {
+      const mediaType = this.getMediaType(node);
+      const duration = node.video_duration || 0;
+      const dimensions = { width: node.dimensions?.width || 0, height: node.dimensions?.height || 0 };
+      
+      // Log video posts for debugging
+      if (mediaType === 'video') {
+        logger.info(`Video post detected: ${node.shortcode}, duration: ${duration}s, dimensions: ${dimensions.width}x${dimensions.height}`);
+      }
+      
       return {
         instagram_post_id: node.id,
         shortcode: node.shortcode,
-        media_type: this.getMediaType(node),
+        media_type: mediaType,
         caption: node.edge_media_to_caption?.edges?.[0]?.node?.text || '',
         display_url: node.display_url,
         video_url: node.video_url || null,
@@ -374,15 +394,18 @@ class InstagramService {
         views: node.video_view_count || 0,
         hashtags: this.extractHashtags(node.edge_media_to_caption?.edges?.[0]?.node?.text || ''),
         mentions: this.extractMentions(node.edge_media_to_caption?.edges?.[0]?.node?.text || ''),
-        dimensions: { width: node.dimensions?.width || 0, height: node.dimensions?.height || 0 },
-        duration: node.video_duration || 0,
+        dimensions: dimensions,
+        duration: duration,
         location: node.location ? { id: node.location.id, name: node.location.name, slug: node.location.slug } : null,
         instagram_data: {
           taken_at: new Date(node.taken_at_timestamp * 1000),
           posted_at: new Date(node.taken_at_timestamp * 1000),
           accessibility_caption: node.accessibility_caption || '',
           is_paid_partnership: false,
-          tagged_users: this.extractTaggedUsers(node)
+          tagged_users: this.extractTaggedUsers(node),
+          // Add more metadata for better reel detection
+          product_type: node.product_type || null,
+          is_reel: node.is_reel || false
         }
       };
     } catch (error) {
@@ -393,8 +416,16 @@ class InstagramService {
 
   extractReelsFromPosts(posts) {
     try {
-      return posts
-        .filter(post => this.isReel(post))
+      logger.info(`Extracting reels from ${posts.length} posts`);
+      
+      const reels = posts
+        .filter(post => {
+          const isReel = this.isReel(post);
+          if (isReel) {
+            logger.info(`Identified reel: ${post.shortcode} (duration: ${post.duration}s, media_type: ${post.media_type})`);
+          }
+          return isReel;
+        })
         .map(post => {
           // Preserve Cloudinary URLs that were uploaded during post processing
           const reelData = { 
@@ -415,6 +446,9 @@ class InstagramService {
           
           return reelData;
         });
+      
+      logger.info(`Extracted ${reels.length} reels from ${posts.length} posts`);
+      return reels;
     } catch (error) {
       logger.error('Error extracting reels:', error);
       return [];
@@ -425,36 +459,147 @@ class InstagramService {
    * Improved reel detection logic
    */
   isReel(post) {
-    // Check if it's a video
+    // First check if it's a video - reels are always videos
     if (post.media_type !== 'video') return false;
     
+    logger.info(`Checking if post ${post.shortcode} is a reel:`, {
+      media_type: post.media_type,
+      duration: post.duration,
+      dimensions: post.dimensions,
+      has_video_url: !!post.video_url,
+      views: post.views,
+      likes: post.likes,
+      comments: post.comments,
+      caption_preview: (post.caption || '').substring(0, 50)
+    });
+    
     // Multiple conditions to identify reels:
-    // 1. Has duration and it's short (reels are typically 15-90 seconds)
-    if (post.duration > 0 && post.duration <= 90) return true;
     
-    // 2. Has video_url and is not a long video
-    if (post.video_url && post.duration <= 90) return true;
-    
-    // 3. Check caption for reel indicators
-    const caption = (post.caption || '').toLowerCase();
-    if (caption.includes('#reel') || caption.includes('#reels')) return true;
-    
-    // 4. Check if it's a short video with high engagement (typical of reels)
-    if (post.duration > 0 && post.duration <= 60 && (post.likes > 100 || post.comments > 10)) return true;
-    
-    // 5. Check for reel-specific patterns in the data structure
-    if (post.instagram_data?.is_reel === true) return true;
-    
-    // 6. Check for vertical video aspect ratio (common for reels)
-    if (post.dimensions && post.dimensions.height > post.dimensions.width) {
-      const aspectRatio = post.dimensions.height / post.dimensions.width;
-      if (aspectRatio > 1.2 && post.duration <= 90) return true;
+    // 1. Check for explicit reel indicators in the data
+    if (post.instagram_data?.product_type === 'clips' || 
+        post.instagram_data?.product_type === 'reel' ||
+        post.instagram_data?.is_reel === true) {
+      logger.info(`Post ${post.shortcode} identified as reel via explicit indicators`);
+      return true;
     }
     
-    // 7. Check for reel-specific metadata
-    if (post.instagram_data?.product_type === 'clips' || post.instagram_data?.product_type === 'reel') return true;
+    // 2. Check caption for reel indicators (case insensitive)
+    const caption = (post.caption || '').toLowerCase();
+    if (caption.includes('#reel') || 
+        caption.includes('#reels') || 
+        caption.includes('reel') ||
+        caption.includes('reels')) {
+      logger.info(`Post ${post.shortcode} identified as reel via caption`);
+      return true;
+    }
     
+    // 3. Check duration - reels are typically 15-90 seconds
+    if (post.duration > 0 && post.duration <= 90) {
+      logger.info(`Post ${post.shortcode} identified as reel via duration (${post.duration}s)`);
+      return true;
+    }
+    
+    // 4. Check for vertical video aspect ratio (common for reels)
+    if (post.dimensions && post.dimensions.height > post.dimensions.width) {
+      const aspectRatio = post.dimensions.height / post.dimensions.width;
+      // Reels are typically vertical (9:16 aspect ratio or similar)
+      if (aspectRatio > 1.2) {
+        logger.info(`Post ${post.shortcode} identified as reel via aspect ratio (${aspectRatio})`);
+        return true;
+      }
+    }
+    
+    // 5. Check for short video with video_url (likely a reel)
+    if (post.video_url && post.duration <= 90) {
+      logger.info(`Post ${post.shortcode} identified as reel via video_url and duration`);
+      return true;
+    }
+    
+    // 6. Check for high engagement short videos (typical of reels)
+    if (post.duration > 0 && post.duration <= 60) {
+      const totalEngagement = (post.likes || 0) + (post.comments || 0);
+      if (totalEngagement > 50) { // Lower threshold for better detection
+        logger.info(`Post ${post.shortcode} identified as reel via engagement (${totalEngagement})`);
+        return true;
+      }
+    }
+    
+    // 7. Check for views count (reels often have views)
+    if (post.views > 0 && post.duration <= 90) {
+      logger.info(`Post ${post.shortcode} identified as reel via views (${post.views})`);
+      return true;
+    }
+    
+    // 8. Default: if it's a short video without explicit indicators, assume it's a reel
+    if (post.duration > 0 && post.duration <= 90) {
+      logger.info(`Post ${post.shortcode} identified as reel via default rule (short video)`);
+      return true;
+    }
+    
+    logger.info(`Post ${post.shortcode} NOT identified as reel`);
     return false;
+  }
+
+  /**
+   * Fallback reel extraction method for cases where primary detection fails
+   */
+  extractReelsFallback(posts) {
+    try {
+      logger.info('Using fallback reel detection method');
+      
+      const fallbackReels = posts
+        .filter(post => {
+          // More aggressive filtering for reels
+          if (post.media_type !== 'video') return false;
+          
+          // Any video with duration <= 90 seconds is likely a reel
+          if (post.duration > 0 && post.duration <= 90) {
+            logger.info(`Fallback: Identified ${post.shortcode} as reel (duration: ${post.duration}s)`);
+            return true;
+          }
+          
+          // Any video with vertical aspect ratio
+          if (post.dimensions && post.dimensions.height > post.dimensions.width) {
+            const aspectRatio = post.dimensions.height / post.dimensions.width;
+            if (aspectRatio > 1.1) { // Lower threshold
+              logger.info(`Fallback: Identified ${post.shortcode} as reel (aspect ratio: ${aspectRatio})`);
+              return true;
+            }
+          }
+          
+          // Any video with views (reels typically have views)
+          if (post.views > 0) {
+            logger.info(`Fallback: Identified ${post.shortcode} as reel (views: ${post.views})`);
+            return true;
+          }
+          
+          return false;
+        })
+        .map(post => {
+          const reelData = { 
+            ...post, 
+            type: 'reel', 
+            url: `https://www.instagram.com/reel/${post.shortcode}/` 
+          };
+          
+          // Preserve Cloudinary URLs if available
+          if (post.video_url && post.video_url.includes('cloudinary.com')) {
+            reelData.video_url = post.video_url;
+          }
+          
+          if (post.thumbnail_url && post.thumbnail_url.includes('cloudinary.com')) {
+            reelData.thumbnail_url = post.thumbnail_url;
+          }
+          
+          return reelData;
+        });
+      
+      logger.info(`Fallback method extracted ${fallbackReels.length} reels`);
+      return fallbackReels;
+    } catch (error) {
+      logger.error('Error in fallback reel extraction:', error);
+      return [];
+    }
   }
 
   /**

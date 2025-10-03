@@ -123,6 +123,12 @@ const Dashboard = () => {
         if (reelAnalyticsRes.success && reelAnalyticsRes.data) {
           setReelAnalytics(reelAnalyticsRes.data);
         }
+        
+        // Debug logging
+        console.log('Posts data:', postsRes);
+        console.log('Reels data:', reelsRes);
+        console.log('Posts count:', postsRes.success ? postsRes.data.length : 0);
+        console.log('Reels count:', reelsRes.success ? reelsRes.data.length : 0);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -312,9 +318,10 @@ const Dashboard = () => {
                 posts.map((post, i) => {
                   const analytics = getAnalyticsForContent(post.post_id, 'posts');
                   return (
-                    <div key={post.post_id || i} className="modern-card">
-                      <div className="card-header">
-                        <div className="card-image">
+                    <div key={post.post_id || i} className="wireframe-card">
+                      {/* Left Panel - Content Display */}
+                      <div className="card-left-panel">
+                        <div className="image-section">
                           {post.image_url ? (
                             <img 
                               src={post.image_url} 
@@ -334,85 +341,118 @@ const Dashboard = () => {
                               </svg>
                             </div>
                           )}
-                          <div className="image-overlay">
-                            <div className="engagement-badge">
-                              <span className="likes">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
-                                </svg>
-                                {post.likes_count?.toLocaleString() || 0}
-                              </span>
-                              <span className="comments">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                                </svg>
-                                {post.comments_count || 0}
-                              </span>
-                            </div>
-                          </div>
+                        </div>
+                        
+                        {/* Navigation Indicators */}
+                        <div className="indicators">
+                          <div className="indicator-dot"></div>
+                          <div className="indicator-dot"></div>
+                        </div>
+                        
+                        {/* Bio Section */}
+                        <div className="bio-section">
+                          <h4 className="bio-title">Bio</h4>
+                          <p className="bio-text">
+                            {post.caption ? post.caption.substring(0, 100) + '...' : 'No caption available'}
+                          </p>
                         </div>
                       </div>
                       
-                      <div className="card-body">
-                        <div className="bio-section">
-                          <h4 className="bio-title">Caption</h4>
-                          <p className="bio-text">
-                            {post.caption ? post.caption.substring(0, 150) + '...' : 'No caption available'}
-                          </p>
+                      {/* Right Panel - Analysis Section */}
+                      <div className="card-right-panel">
+                        <div className="analysis-header">
+                          <h4>Analysis</h4>
                         </div>
-
-                        {analytics && (
-                          <div className="ml-analysis">
-                            <div className="analysis-header">
-                              <h4>AI Analysis</h4>
-                              <div className="quality-score">
-                                {Math.round(analytics.quality_score || 0)}/10
-                              </div>
-                            </div>
-                            
-                            <div className="analysis-grid">
-                              {analytics.keywords && analytics.keywords.length > 0 && (
-                                <div className="analysis-item">
-                                  <h5>Tags</h5>
-                                  <div className="tags-container">
-                                    {analytics.keywords.slice(0, 6).map((tag, idx) => (
-                                      <span key={idx} className="tag">{tag}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {analytics.vibe_classification && (
-                                <div className="analysis-item">
-                                  <h5>Ambience</h5>
-                                  <div className="vibe-container">
-                                    {analytics.vibe_classification.split(',').map((vibe, idx) => (
-                                      <span key={idx} className="vibe-tag">{vibe.trim()}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              
-                              <div className="analysis-item">
-                                <h5>Quality</h5>
-                                <div className="metrics">
-                                  <div className="metric">
-                                    <span className="metric-label">Score</span>
-                                    <div className="metric-bar">
-                                      <div className="metric-fill" style={{width: `${(analytics.quality_score || 0) * 10}%`}}></div>
-                                    </div>
-                                  </div>
-                                  <div className="metric">
-                                    <span className="metric-label">Lighting</span>
-                                    <div className="metric-bar">
-                                      <div className="metric-fill lighting" style={{width: `${(analytics.lighting_score || 0) * 10}%`}}></div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                        
+                        {/* Tags Section */}
+                        <div className="analysis-section">
+                          <h5 className="section-label">Tags -</h5>
+                          <div className="tags-display">
+                            {analytics && analytics.keywords && analytics.keywords.length > 0 ? (
+                              analytics.keywords.slice(0, 3).map((tag, idx) => (
+                                <div key={idx} className="tag-item">{tag}</div>
+                              ))
+                            ) : (
+                              <>
+                                <div className="tag-item placeholder">Tag 1</div>
+                                <div className="tag-item placeholder">Tag 2</div>
+                                <div className="tag-item placeholder">Tag 3</div>
+                              </>
+                            )}
                           </div>
-                        )}
+                        </div>
+                        
+                        {/* Ambience Section */}
+                        <div className="analysis-section">
+                          <h5 className="section-label">Ambience -</h5>
+                          <div className="ambience-display">
+                            {analytics && analytics.vibe_classification ? (
+                              analytics.vibe_classification.split(',').slice(0, 3).map((vibe, idx) => (
+                                <div key={idx} className="ambience-item">{vibe.trim()}</div>
+                              ))
+                            ) : (
+                              <>
+                                <div className="ambience-item placeholder">Ambience 1</div>
+                                <div className="ambience-item placeholder">Ambience 2</div>
+                                <div className="ambience-item placeholder">Ambience 3</div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Quality Section */}
+                        <div className="analysis-section">
+                          <h5 className="section-label">Quality</h5>
+                          <div className="quality-display">
+                            {analytics ? (
+                              <>
+                                <div className="quality-item">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: `${(analytics.quality_score || 0) * 10}%`}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: `${(analytics.lighting_score || 0) * 10}%`}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: `${(analytics.visual_appeal_score || 0) * 10}%`}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: `${(analytics.consistency_score || 0) * 10}%`}}></div>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="quality-item placeholder">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: '75%'}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item placeholder">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: '60%'}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item placeholder">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: '80%'}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item placeholder">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: '45%'}}></div>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
@@ -421,13 +461,17 @@ const Dashboard = () => {
                 <div className="no-content">No posts found</div>
               )
             ) : (
-              reels.length > 0 ? (
-                reels.map((reel, i) => {
+              (() => {
+                console.log('Rendering reels section, reels count:', reels.length);
+                console.log('Reels data:', reels);
+                return reels.length > 0 ? (
+                  reels.map((reel, i) => {
                   const analytics = getAnalyticsForContent(reel.reel_id, 'reels');
                   return (
-                    <div key={reel.reel_id || i} className="modern-card">
-                      <div className="card-header">
-                        <div className="card-image">
+                    <div key={reel.reel_id || i} className="wireframe-card">
+                      {/* Left Panel - Content Display */}
+                      <div className="card-left-panel">
+                        <div className="image-section">
                           {reel.thumbnail_url ? (
                             <img 
                               src={reel.thumbnail_url} 
@@ -445,93 +489,126 @@ const Dashboard = () => {
                               </svg>
                             </div>
                           )}
-                          <div className="image-overlay">
-                            <div className="engagement-badge">
-                              <span className="views">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-                                  <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                                {reel.views_count?.toLocaleString() || 0}
-                              </span>
-                              <span className="likes">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
-                                </svg>
-                                {reel.likes_count?.toLocaleString() || 0}
-                              </span>
-                            </div>
-                          </div>
+                        </div>
+                        
+                        {/* Navigation Indicators */}
+                        <div className="indicators">
+                          <div className="indicator-dot"></div>
+                          <div className="indicator-dot"></div>
+                        </div>
+                        
+                        {/* Bio Section */}
+                        <div className="bio-section">
+                          <h4 className="bio-title">Bio</h4>
+                          <p className="bio-text">
+                            {reel.caption ? reel.caption.substring(0, 100) + '...' : 'No caption available'}
+                          </p>
                         </div>
                       </div>
                       
-                      <div className="card-body">
-                        <div className="bio-section">
-                          <h4 className="bio-title">Caption</h4>
-                          <p className="bio-text">
-                            {reel.caption ? reel.caption.substring(0, 150) + '...' : 'No caption available'}
-                          </p>
+                      {/* Right Panel - Analysis Section */}
+                      <div className="card-right-panel">
+                        <div className="analysis-header">
+                          <h4>Analysis</h4>
                         </div>
-
-                        {analytics && (
-                          <div className="ml-analysis">
-                            <div className="analysis-header">
-                              <h4>AI Analysis</h4>
-                              <div className="quality-score">
-                                {Math.round(analytics.quality_score || 0)}/10
-                              </div>
-                            </div>
-                            
-                            <div className="analysis-grid">
-                              {analytics.descriptive_tags && analytics.descriptive_tags.length > 0 && (
-                                <div className="analysis-item">
-                                  <h5>Tags</h5>
-                                  <div className="tags-container">
-                                    {analytics.descriptive_tags.slice(0, 6).map((tag, idx) => (
-                                      <span key={idx} className="tag">{tag}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {analytics.vibe_classification && (
-                                <div className="analysis-item">
-                                  <h5>Ambience</h5>
-                                  <div className="vibe-container">
-                                    {analytics.vibe_classification.split(',').map((vibe, idx) => (
-                                      <span key={idx} className="vibe-tag">{vibe.trim()}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              
-                              <div className="analysis-item">
-                                <h5>Quality</h5>
-                                <div className="metrics">
-                                  <div className="metric">
-                                    <span className="metric-label">Score</span>
-                                    <div className="metric-bar">
-                                      <div className="metric-fill" style={{width: `${(analytics.quality_score || 0) * 10}%`}}></div>
-                                    </div>
-                                  </div>
-                                  <div className="metric">
-                                    <span className="metric-label">Lighting</span>
-                                    <div className="metric-bar">
-                                      <div className="metric-fill lighting" style={{width: `${(analytics.lighting_score || 0) * 10}%`}}></div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                        
+                        {/* Tags Section */}
+                        <div className="analysis-section">
+                          <h5 className="section-label">Tags -</h5>
+                          <div className="tags-display">
+                            {analytics && analytics.descriptive_tags && analytics.descriptive_tags.length > 0 ? (
+                              analytics.descriptive_tags.slice(0, 3).map((tag, idx) => (
+                                <div key={idx} className="tag-item">{tag}</div>
+                              ))
+                            ) : (
+                              <>
+                                <div className="tag-item placeholder">Tag 1</div>
+                                <div className="tag-item placeholder">Tag 2</div>
+                                <div className="tag-item placeholder">Tag 3</div>
+                              </>
+                            )}
                           </div>
-                        )}
+                        </div>
+                        
+                        {/* Ambience Section */}
+                        <div className="analysis-section">
+                          <h5 className="section-label">Ambience -</h5>
+                          <div className="ambience-display">
+                            {analytics && analytics.vibe_classification ? (
+                              analytics.vibe_classification.split(',').slice(0, 3).map((vibe, idx) => (
+                                <div key={idx} className="ambience-item">{vibe.trim()}</div>
+                              ))
+                            ) : (
+                              <>
+                                <div className="ambience-item placeholder">Ambience 1</div>
+                                <div className="ambience-item placeholder">Ambience 2</div>
+                                <div className="ambience-item placeholder">Ambience 3</div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Quality Section */}
+                        <div className="analysis-section">
+                          <h5 className="section-label">Quality</h5>
+                          <div className="quality-display">
+                            {analytics ? (
+                              <>
+                                <div className="quality-item">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: `${(analytics.quality_score || 0) * 10}%`}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: `${(analytics.lighting_score || 0) * 10}%`}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: `${(analytics.visual_appeal_score || 0) * 10}%`}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: `${(analytics.consistency_score || 0) * 10}%`}}></div>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="quality-item placeholder">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: '75%'}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item placeholder">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: '60%'}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item placeholder">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: '80%'}}></div>
+                                  </div>
+                                </div>
+                                <div className="quality-item placeholder">
+                                  <div className="quality-bar">
+                                    <div className="quality-fill" style={{width: '45%'}}></div>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
-                })
-              ) : (
-                <div className="no-content">No reels found</div>
-              )
+                  })
+                ) : (
+                  <div className="no-content">No reels found</div>
+                );
+              })()
             )}
           </div>
         </div>

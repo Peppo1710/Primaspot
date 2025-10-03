@@ -364,7 +364,7 @@
 
 .content-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 2rem;
   padding: 2rem;
 }
@@ -1553,5 +1553,338 @@
   .tag {
     font-size: 11px;
     padding: 4px 8px;
+  }
+}
+
+/* Wireframe Card Styles */
+
+.wireframe-card {
+  background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+  border-radius: 16px;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  margin-bottom: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  display: flex;
+  height: 480px;
+}
+
+.wireframe-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 
+    0 16px 48px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Left Panel - Content Display */
+.card-left-panel {
+  flex: 0 0 50%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border-radius: 16px 0 0 16px;
+  overflow: hidden;
+  position: relative;
+}
+
+.card-left-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 0%, rgba(157, 78, 221, 0.1) 100%);
+  z-index: 1;
+}
+
+.image-section {
+  flex: 1;
+  position: relative;
+  background: linear-gradient(135deg, #121212 0%, #1A1A1A 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.image-section img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.wireframe-card:hover .image-section img {
+  transform: scale(1.05);
+}
+
+.image-placeholder {
+  color: #B0B0B0;
+  opacity: 0.6;
+  z-index: 2;
+}
+
+.indicators {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  z-index: 2;
+  position: relative;
+}
+
+.indicator-dot {
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.indicator-dot:hover {
+  background: rgba(255, 255, 255, 0.6);
+  transform: scale(1.2);
+}
+
+.bio-section {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  z-index: 2;
+  position: relative;
+}
+
+.bio-title {
+  margin: 0 0 8px 0;
+  color: #F5F5F5;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bio-text {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* Right Panel - Analysis Section */
+.card-right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(10, 10, 10, 0.8) 0%, rgba(20, 20, 20, 0.9) 100%);
+  position: relative;
+}
+
+.analysis-header {
+  margin-bottom: 8px;
+}
+
+.analysis-header h4 {
+  color: #F5F5F5;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-label {
+  color: #B0B0B0;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tags Display */
+.tags-display {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag-item {
+  background: rgba(0, 212, 255, 0.1);
+  color: #00d4ff;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 500;
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  transition: all 0.3s ease;
+  text-align: center;
+  display: inline-block;
+  margin: 2px;
+}
+
+.tag-item:hover {
+  background: rgba(0, 212, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
+}
+
+.tag-item.placeholder {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Ambience Display */
+.ambience-display {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ambience-item {
+  background: rgba(255, 107, 107, 0.1);
+  color: #ff6b6b;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 500;
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  transition: all 0.3s ease;
+  text-align: center;
+  display: inline-block;
+  margin: 2px;
+}
+
+.ambience-item:hover {
+  background: rgba(255, 107, 107, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.2);
+}
+
+.ambience-item.placeholder {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Quality Display */
+.quality-display {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quality-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quality-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.quality-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00d4ff, #4ecdc4);
+  border-radius: 3px;
+  transition: width 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+}
+
+.quality-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+.quality-item.placeholder .quality-fill {
+  background: linear-gradient(90deg, #ff6b6b, #ffa500);
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Mobile Responsive for Wireframe Cards */
+@media (max-width: 768px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .wireframe-card {
+    height: auto;
+    flex-direction: column;
+  }
+  
+  .card-left-panel {
+    flex: none;
+    border-radius: 16px 16px 0 0;
+  }
+  
+  .card-right-panel {
+    border-radius: 0 0 16px 16px;
+  }
+  
+  .image-section {
+    height: 200px;
+  }
+  
+  .bio-section {
+    padding: 12px;
+  }
+  
+  .card-right-panel {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .wireframe-card {
+    margin-bottom: 16px;
+  }
+  
+  .card-right-panel {
+    padding: 12px;
+    gap: 12px;
+  }
+  
+  .analysis-section {
+    gap: 6px;
+  }
+  
+  .tag-item,
+  .ambience-item {
+    padding: 6px 8px;
+    font-size: 10px;
   }
 }

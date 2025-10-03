@@ -72,7 +72,9 @@ export default function SearchPage() {
     setSearchStatus(null);
     
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
+      const backendUrl = 'https://primaspot-y10q.onrender.com';
+      console.log(backendUrl);
+      
       const response = await fetch(`${backendUrl}/api/user/validate/${query}`, {
         method: 'GET',
         headers: {
@@ -96,6 +98,7 @@ export default function SearchPage() {
       }
     } catch (error) {
       console.error('API Error:', error);
+      console.log('API Error:', error);
       setSearchStatus('error');
     }
     

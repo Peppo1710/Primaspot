@@ -1,5 +1,5 @@
 // API service for backend integration
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8001/api';
+const API_BASE_URL = 'https://primaspot-y10q.onrender.com/api';
 
 export const api = {
   // Validate user (auto-scrapes if not in DB)

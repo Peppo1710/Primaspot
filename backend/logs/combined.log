@@ -3830,3 +3830,5 @@
 {"context":"DatabaseService","level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mGroq API response received\u001b[39m","timestamp":"2025-10-03 22:33:52:3352"}
 {"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mFetching post analytics for user: d.taraxia_iiitn\u001b[39m","timestamp":"2025-10-03 22:33:58:3358"}
 {"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mFound existing analytics for 12 posts\u001b[39m","timestamp":"2025-10-03 22:33:58:3358"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mValidating user: d.taraxia_iiitn\u001b[39m","timestamp":"2025-10-04 00:59:46:5946"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mUser d.taraxia_iiitn found in database\u001b[39m","timestamp":"2025-10-04 00:59:46:5946"}
