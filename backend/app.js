@@ -64,7 +64,7 @@ app.use((req, res, next) => {
 });
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/', (req, res) => {
   const dbStatus = dbConnection.getStatus();
   const health = {
     status: 'ok',
@@ -81,19 +81,19 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
-app.get('/api', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Instagram Dashboard API',
-    version: '1.0.0',
-    endpoints: {
-      users: '/api/users',
-      user: '/api/user/:username',
-      validate: '/api/user/validate/:username',
-      health: '/health'
-    }
-  });
-});
+// app.get('/api', (req, res) => {
+//   res.json({
+//     success: true,
+//     message: 'Instagram Dashboard API',
+//     version: '1.0.0',
+//     endpoints: {
+//       users: '/api/users',
+//       user: '/api/user/:username',
+//       validate: '/api/user/validate/:username',
+//       health: '/health'
+//     }
+//   });
+// });
 
 // Mount user routes
 app.use('/api/user', userRoutes);
