@@ -4,8 +4,8 @@
   "description": "Instagram Influencer Analytics Backend API",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node app.js",
+    "dev": "nodemon app.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cloudinary": "node scripts/test-cloudinary.js",

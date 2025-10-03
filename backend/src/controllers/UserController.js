@@ -406,8 +406,8 @@ class UserController {
         const mlData = await mlResponse.json();
         logger.info(`ML API returned data:`, JSON.stringify(mlData, null, 2));
 
-        // Check if ML API returned valid data in the correct format
-        if (!mlData || !mlData.results || Object.keys(mlData.results).length === 0) {
+        // Check if ML API returned valid data
+        if (!mlData || Object.keys(mlData).length === 0) {
           logger.warn('ML API returned empty or invalid data');
           return res.status(200).json({
             success: true,
@@ -421,7 +421,11 @@ class UserController {
         }
 
         // Convert ML API response format to array format
-        const analyticsArray = Object.values(mlData.results);
+        // ML API returns data as { "image_url": { analysis_data } }
+        const analyticsArray = Object.entries(mlData).map(([imageUrl, analysis]) => ({
+          image_url: imageUrl,
+          ...analysis
+        }));
         logger.info(`Converted ML data to array with ${analyticsArray.length} items`);
 
         // Store analytics in database
@@ -456,7 +460,7 @@ class UserController {
   }
 
   /**
-   * Get Reel Analytics - Analyze reel performance (placeholder for future implementation)
+   * Get Reel Analytics - Analyze reel performance using ML API
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    * @param {Function} next - Express next function
@@ -474,27 +478,122 @@ class UserController {
 
       logger.info(`Fetching reel analytics for user: ${username}`);
 
-      // TODO: Implement reel analytics
-      // This would include:
-      // - Video analysis using AI/ML
-      // - Engagement analysis
-      // - Performance metrics
-      // - Content insights
+      const user = await this.databaseService.findUserByUsername(username);
 
-      return res.status(200).json({
-        success: true,
-        message: `Reel analytics for @${username} (placeholder)`,
-        data: {
-          message: "Reel analytics feature is under development",
-          features: [
-            "Video analysis using AI/ML",
-            "Engagement analysis",
-            "Performance metrics",
-            "Content insights"
-          ],
-          status: "coming_soon"
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: `User @${username} not found in database`
+        });
+      }
+
+      // Get user reels
+      const reels = await this.databaseService.getUserReels(user._id, { limit: 1000 });
+      
+      if (reels.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: `No reels found for @${username}`,
+          data: []
+        });
+      }
+
+      // Check if we already have analytics data for this user's reels
+      const existingAnalytics = await this.databaseService.getReelAnalytics(user._id);
+      
+      if (existingAnalytics.length > 0) {
+        logger.info(`Found existing reel analytics for ${existingAnalytics.length} reels`);
+        return res.status(200).json({
+          success: true,
+          message: `Reel analytics for @${username}`,
+          data: existingAnalytics
+        });
+      }
+
+      // No existing analytics, call ML API
+      logger.info(`No existing reel analytics found, calling ML API for ${reels.length} reels`);
+      
+      // Extract thumbnail URLs from reels
+      const thumbnailUrls = reels
+        .filter(reel => reel.thumbnail_url)
+        .map(reel => reel.thumbnail_url);
+
+      if (thumbnailUrls.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: `No thumbnails found in reels for @${username}`,
+          data: []
+        });
+      }
+
+      // Call ML API
+      const mlApiUrl = 'http://127.0.0.1:5000/analyze';
+      logger.info(`Calling ML API with ${thumbnailUrls.length} reel thumbnail URLs:`, thumbnailUrls);
+      
+      try {
+        const mlResponse = await fetch(mlApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ urls: thumbnailUrls }),
+          timeout: 30000 // 30 second timeout
+        });
+
+        if (!mlResponse.ok) {
+          logger.error(`ML API error: ${mlResponse.status} ${mlResponse.statusText}`);
+          throw new Error(`ML API error: ${mlResponse.status} ${mlResponse.statusText}`);
         }
-      });
+
+        const mlData = await mlResponse.json();
+        logger.info(`ML API returned reel data:`, JSON.stringify(mlData, null, 2));
+
+        // Check if ML API returned valid data
+        if (!mlData || Object.keys(mlData).length === 0) {
+          logger.warn('ML API returned empty or invalid reel data');
+          return res.status(200).json({
+            success: true,
+            message: `ML API returned no analysis data for @${username} reels`,
+            data: {
+              message: "ML API returned empty data",
+              thumbnailUrls: thumbnailUrls,
+              mlResponse: mlData
+            }
+          });
+        }
+
+        // Convert ML API response format to array format
+        // ML API returns data as { "thumbnail_url": { analysis_data } }
+        const analyticsArray = Object.entries(mlData).map(([thumbnailUrl, analysis]) => ({
+          thumbnail_url: thumbnailUrl,
+          ...analysis
+        }));
+        logger.info(`Converted ML reel data to array with ${analyticsArray.length} items`);
+
+        // Store analytics in database
+        const savedAnalytics = await this.databaseService.saveReelAnalytics(reels, analyticsArray, user._id, username);
+        
+        return res.status(200).json({
+          success: true,
+          message: `Reel analytics for @${username}`,
+          data: savedAnalytics
+        });
+
+      } catch (mlError) {
+        logger.error(`ML API call failed for reels:`, mlError);
+        
+        // Return error response instead of throwing
+        return res.status(500).json({
+          success: false,
+          message: `Failed to analyze reels for @${username}`,
+          error: {
+            type: 'ML_API_ERROR',
+            message: mlError.message,
+            thumbnailUrls: thumbnailUrls,
+            mlApiUrl: mlApiUrl
+          }
+        });
+      }
 
     } catch (error) {
       logger.error(`Error fetching reel analytics for ${req.params.username}:`, error);

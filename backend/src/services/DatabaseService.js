@@ -430,25 +430,58 @@ class DatabaseService {
     }
   }
 
+  async getReelAnalytics(userId) {
+    try {
+      const analyticsDoc = await db.ReelAiAnalysis
+        .findOne({ profile_id: userId })
+        .lean();
+      
+      if (!analyticsDoc || !analyticsDoc.analytics) {
+        return [];
+      }
+      
+      return analyticsDoc.analytics;
+    } catch (error) {
+      this.logger.error('Error in getReelAnalytics:', error);
+      throw new ApiError(500, 'Database error while retrieving reel analytics');
+    }
+  }
+
   async savePostAnalytics(posts, mlData, userId, username) {
     try {
       // Transform analytics data to new format
       const analyticsArray = [];
       
-      for (let i = 0; i < posts.length && i < mlData.length; i++) {
-        const post = posts[i];
-        const analysis = mlData[i];
+      // Match posts with ML analysis data by image URL
+      for (const post of posts) {
+        if (!post.image_url) continue;
         
-        analyticsArray.push({
-          post_id: post.post_id,
-          content_categories: analysis.keywords || [],
-          vibe_classification: Array.isArray(analysis.vibe) ? analysis.vibe.join(', ') : (analysis.vibe || ''),
-          quality_score: analysis.quality?.visual_appeal || 0,
-          lighting_score: analysis.quality?.lighting === 'good' ? 8 : (analysis.quality?.lighting === 'underexposed' ? 4 : 6),
-          visual_appeal_score: analysis.quality?.visual_appeal || 0,
-          consistency_score: analysis.quality?.consistency || 0,
-          keywords: analysis.keywords || []
-        });
+        // Find matching ML analysis data
+        const analysis = mlData.find(mlItem => 
+          mlItem.image_url === post.image_url || 
+          mlItem.image_url.includes(post.image_url.split('/').pop()) ||
+          post.image_url.includes(mlItem.image_url.split('/').pop())
+        );
+        
+        if (analysis) {
+          analyticsArray.push({
+            post_id: post.post_id,
+            content_categories: analysis.tags || [],
+            vibe_classification: Array.isArray(analysis.ambience) ? analysis.ambience.join(', ') : (analysis.ambience || ''),
+            quality_score: analysis.quality?.blur_score ? (analysis.quality.blur_score * 10) : 0,
+            lighting_score: analysis.quality?.brightness ? Math.min(10, Math.max(1, analysis.quality.brightness / 25)) : 5,
+            visual_appeal_score: analysis.quality?.blur_score ? (analysis.quality.blur_score * 10) : 0,
+            consistency_score: analysis.quality?.brightness ? Math.min(10, Math.max(1, analysis.quality.brightness / 25)) : 5,
+            keywords: analysis.tags || [],
+            caption: analysis.caption || '',
+            num_people: analysis.num_people || 0,
+            ambience: analysis.ambience || [],
+            image_dimensions: {
+              width: analysis.quality?.width || 0,
+              height: analysis.quality?.height || 0
+            }
+          });
+        }
       }
 
       // Find or create user's analytics document
@@ -473,6 +506,66 @@ class DatabaseService {
     } catch (error) {
       this.logger.error('Error in savePostAnalytics:', error);
       throw new ApiError(500, 'Database error while saving post analytics');
+    }
+  }
+
+  async saveReelAnalytics(reels, mlData, userId, username) {
+    try {
+      // Transform analytics data to new format
+      const analyticsArray = [];
+      
+      // Match reels with ML analysis data by thumbnail URL
+      for (const reel of reels) {
+        if (!reel.thumbnail_url) continue;
+        
+        // Find matching ML analysis data
+        const analysis = mlData.find(mlItem => 
+          mlItem.thumbnail_url === reel.thumbnail_url || 
+          mlItem.thumbnail_url.includes(reel.thumbnail_url.split('/').pop()) ||
+          reel.thumbnail_url.includes(mlItem.thumbnail_url.split('/').pop())
+        );
+        
+        if (analysis) {
+          analyticsArray.push({
+            reel_id: reel.reel_id,
+            content_categories: analysis.tags || [],
+            vibe_classification: Array.isArray(analysis.ambience) ? analysis.ambience.join(', ') : (analysis.ambience || ''),
+            quality_score: analysis.quality?.blur_score ? (analysis.quality.blur_score * 10) : 0,
+            events_objects: analysis.tags || [],
+            descriptive_tags: analysis.tags || [],
+            caption: analysis.caption || '',
+            num_people: analysis.num_people || 0,
+            ambience: analysis.ambience || [],
+            image_dimensions: {
+              width: analysis.quality?.width || 0,
+              height: analysis.quality?.height || 0
+            }
+          });
+        }
+      }
+
+      // Find or create user's reel analytics document
+      const filter = { profile_id: userId };
+      const update = {
+        username: username.toLowerCase(),
+        profile_id: userId,
+        analytics: analyticsArray,
+        total_analyzed: analyticsArray.length,
+        analyzed_at: new Date(),
+        updatedAt: new Date()
+      };
+
+      const userAnalyticsDoc = await db.ReelAiAnalysis.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: true, new: true }
+      ).lean();
+
+      this.logger.info(`Saved analytics for ${analyticsArray.length} reels`);
+      return userAnalyticsDoc;
+    } catch (error) {
+      this.logger.error('Error in saveReelAnalytics:', error);
+      throw new ApiError(500, 'Database error while saving reel analytics');
     }
   }
 }

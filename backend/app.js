@@ -16,7 +16,7 @@ const userRoutes = require('./src/routes/userRoutes');
 const imageProxyRoutes = require('./src/routes/imageProxy');
 
 const app = express();
-const port = process.env.PORT || 8000;
+const port = process.env.PORT;
 
 // Security middleware
 app.use(helmet({

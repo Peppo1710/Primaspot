@@ -40,6 +40,12 @@ export const api = {
   getEngagementMetrics: async (username) => {
     const response = await fetch(`${API_BASE_URL}/user/engagement/${username}`);
     return response.json();
+  },
+
+  // Get reel analytics
+  getReelAnalytics: async (username) => {
+    const response = await fetch(`${API_BASE_URL}/user/analytics/reels/${username}`);
+    return response.json();
   }
 };
 
