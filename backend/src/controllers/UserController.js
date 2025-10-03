@@ -386,16 +386,11 @@ class UserController {
         });
       }
 
-      console.log("imageUrls", imageUrls);
-      console.log('type of imageUrls:', typeof imageUrls);
-console.log('Array.isArray(imageUrls):', Array.isArray(imageUrls));
-console.log('imageUrls length:', imageUrls && imageUrls.length);
-console.log('first item type:', imageUrls && typeof imageUrls[0]);
 
       
 
       // Call ML API
-      const mlApiUrl = 'http://127.0.0.1:5000/analyze';
+      const mlApiUrl = `${process.env.ML_BACKEND_URL || 'http://127.0.0.1:5000'}/analyze`;
       logger.info(`Calling ML API with ${imageUrls.length} image URLs:`, imageUrls);
       
       try {
@@ -537,7 +532,7 @@ console.log('first item type:', imageUrls && typeof imageUrls[0]);
       }
 
       // Call ML API
-      const mlApiUrl = 'http://127.0.0.1:5000/analyze';
+      const mlApiUrl = `${process.env.ML_BACKEND_URL || 'http://127.0.0.1:5000'}/analyze`;
       logger.info(`Calling ML API with ${thumbnailUrls.length} reel thumbnail URLs:`, thumbnailUrls);
       
       try {

@@ -1,125 +1,32 @@
 # Instagram Dashboard API Documentation
 
-## 🎨 Cloudinary Media Storage
+## Base URL
+```
+http://localhost:8000/api
+```
 
-All Instagram media (profile pictures, post images, videos, reel thumbnails) are automatically uploaded to Cloudinary during scraping. This ensures:
-- **Permanent Storage**: Media remains available even if Instagram URLs expire
-- **Fast Delivery**: Global CDN for optimal performance
-- **Auto Optimization**: Automatic format conversion and quality adjustment
-
-See `CLOUDINARY_INTEGRATION.md` for detailed documentation.
-
----
-
-# Instagram Dashboard API Documentation
-
-## Base Information
-
-**Base URL:** `http://localhost:8000`  
-**API Version:** `1.0.0`  
-**Environment:** Development/Production
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Rate Limiting](#rate-limiting)
-- [Response Format](#response-format)
-- [Error Handling](#error-handling)
-- [Endpoints](#endpoints)
-  - [Health Check](#health-check)
-  - [API Info](#api-info)
-  - [User Validation](#user-validation)
-  - [User Scraping](#user-scraping)
-  - [User Profile](#user-profile)
-  - [User Posts](#user-posts)
-  - [User Reels](#user-reels)
-  - [Post Analytics](#post-analytics)
-  - [Reel Analytics](#reel-analytics)
-  - [Engagement Metrics](#engagement-metrics)
-- [Data Models](#data-models)
-- [Status Codes](#status-codes)
-
----
-
-## Overview
-
-The Instagram Dashboard API provides endpoints to fetch and analyze Instagram user profiles, posts, reels, and analytics data. The API automatically scrapes data from Instagram when a user is not found in the database and stores it for future requests.
-
-### Key Features
-- ✅ User profile validation and scraping
-- ✅ Posts and reels retrieval with pagination
-- ✅ AI/ML-powered post analytics
-- ✅ Engagement metrics calculation
-- ✅ Rate limiting and caching
-- ✅ Comprehensive error handling
-
----
+## Authentication
+All endpoints are currently public (no authentication required).
 
 ## Rate Limiting
-
-### Global Rate Limit
-- **Window:** 15 minutes
-- **Max Requests:** 100 requests per IP
-- **Response on Limit:** 429 Too Many Requests
-
-### Instagram Scraping Rate Limit
-- **Window:** 1 hour
-- **Max Requests:** 20 requests per hour
-- **Cooldown Period:** 4 hours between scrapes for the same user
-- **Response on Limit:** 429 Too Many Requests
+- Instagram scraping endpoints: 20 requests per hour
+- Other endpoints: No rate limiting
 
 ---
 
-## Response Format
-
-### Success Response
-```json
-{
-  "success": true,
-  "message": "Descriptive success message",
-  "data": { /* Response data */ },
-  "pagination": { /* Only for paginated endpoints */ }
-}
-```
-
-### Error Response
-```json
-{
-  "success": false,
-  "message": "Error description",
-  "statusCode": 400
-}
-```
-
----
-
-## Error Handling
-
-All errors follow a consistent format with appropriate HTTP status codes. The API includes custom error handling for:
-- Validation errors (400)
-- Not found errors (404)
-- Rate limit errors (429)
-- Server errors (500)
-- Instagram service errors (503)
-
----
-
-## Endpoints
+## Core Endpoints
 
 ### Health Check
+**GET** `/health`
 
-Check API server and database status.
-
-**Endpoint:** `GET /health`
+Check server and database status.
 
 **Response:**
 ```json
 {
   "status": "ok",
-  "timestamp": "2025-10-01T12:00:00.000Z",
-  "uptime": 3600.123,
+  "timestamp": "2025-10-03T22:00:00.000Z",
+  "uptime": 3600,
   "environment": "development",
   "database": {
     "status": "connected",
@@ -128,17 +35,10 @@ Check API server and database status.
 }
 ```
 
-**Status Codes:**
-- `200` - Healthy
-- `503` - Service Unavailable (Database disconnected)
+### API Information
+**GET** `/api`
 
----
-
-### API Info
-
-Get API information and available endpoints.
-
-**Endpoint:** `GET /api`
+Get basic API information and available endpoints.
 
 **Response:**
 ```json
@@ -155,13 +55,10 @@ Get API information and available endpoints.
 }
 ```
 
----
-
 ### API Documentation
+**GET** `/api/docs`
 
-Get complete API endpoint documentation.
-
-**Endpoint:** `GET /api/docs`
+Get detailed API documentation.
 
 **Response:**
 ```json
@@ -173,858 +70,690 @@ Get complete API endpoint documentation.
       "method": "GET",
       "path": "/user/:username",
       "description": "Get user profile data"
-    },
-    {
-      "method": "GET",
-      "path": "/user/validate/:username",
-      "description": "Validate if username exists on Instagram and call central API"
     }
-    // ... more endpoints
   ]
 }
 ```
 
 ---
 
-### User Validation
+## User Management Endpoints
 
-Validate if a username exists in the database. If not found, automatically scrapes data from Instagram.
+### Validate User
+**GET** `/api/user/validate/:username`
 
-**Endpoint:** `GET /api/user/validate/:username`
+Validate if user exists in database, if not scrape from Instagram.
 
-**URL Parameters:**
-- `username` (string, required) - Instagram username (1-30 characters)
-
-**Example Request:**
-```bash
-GET /api/user/validate/cristiano
-```
-
-**Success Response (User Found in Database):**
-```json
-{
-  "success": true,
-  "message": "User @cristiano found in database",
-  "data": {
-    "username": "cristiano",
-    "exists": true,
-    "lastScraped": "2025-10-01T10:30:00.000Z",
-    "profileId": "507f1f77bcf86cd799439011"
-  }
-}
-```
-
-**Success Response (User Scraped from Instagram):**
-```json
-{
-  "success": true,
-  "message": "Data successfully scraped and stored for @cristiano",
-  "data": {
-    "username": "cristiano",
-    "profileId": "507f1f77bcf86cd799439011",
-    "postsScraped": 12,
-    "reelsScraped": 3,
-    "totalPostsReported": 3500,
-    "apiLimitations": {
-      "postsAvailable": 12,
-      "totalPostsReported": 3500,
-      "note": "Instagram's public API only provides the first 12 posts. For complete data, consider Instagram Graph API or third-party services."
-    }
-  }
-}
-```
-
-**Error Responses:**
-```json
-// Username not found on Instagram
-{
-  "success": false,
-  "message": "Username @invaliduser not found on Instagram",
-  "data": {
-    "username": "invaliduser",
-    "exists": false
-  }
-}
-
-// Rate limit exceeded
-{
-  "success": false,
-  "message": "Rate limit exceeded. Next scrape available at 2025-10-01T14:30:00.000Z"
-}
-```
-
-**Status Codes:**
-- `200` - Success
-- `400` - Invalid username format
-- `404` - Username not found on Instagram
-- `429` - Rate limit exceeded
-
----
-
-### User Scraping
-
-Force scrape user data from Instagram (bypasses cache).
-
-**Endpoint:** `POST /api/user/scrape/:username`
-
-**URL Parameters:**
-- `username` (string, required) - Instagram username
-
-**Example Request:**
-```bash
-POST /api/user/scrape/cristiano
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Data successfully scraped and stored for @cristiano",
-  "data": {
-    "username": "cristiano",
-    "profileId": "507f1f77bcf86cd799439011",
-    "postsScraped": 12,
-    "reelsScraped": 3,
-    "totalPostsReported": 3500,
-    "apiLimitations": {
-      "postsAvailable": 12,
-      "totalPostsReported": 3500,
-      "note": "Instagram's public API only provides the first 12 posts. For complete data, consider Instagram Graph API or third-party services."
-    }
-  }
-}
-```
-
-**Status Codes:**
-- `200` - Success
-- `400` - Invalid username
-- `404` - Username not found on Instagram
-- `429` - Rate limit exceeded
-
----
-
-### User Profile
-
-Get user profile information.
-
-**Endpoint:** `GET /api/user/profile/:username`
-
-**URL Parameters:**
-- `username` (string, required) - Instagram username
-
-**Example Request:**
-```bash
-GET /api/user/profile/cristiano
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Profile data for @cristiano",
-  "data": {
-    "username": "cristiano",
-    "profile": {
-      "full_name": "Cristiano Ronaldo",
-      "profile_picture_url": "https://instagram.com/...",
-      "bio_text": "Professional footballer",
-      "website_url": "https://www.cristianoronaldo.com",
-      "is_verified": true,
-      "account_type": "business"
-    },
-    "stats": {
-      "postsCount": 3500,
-      "followersCount": 600000000,
-      "followingCount": 500,
-      "lastScraped": "2025-10-01T10:30:00.000Z"
-    }
-  }
-}
-```
-
-**Status Codes:**
-- `200` - Success
-- `400` - Invalid username
-- `404` - User not found in database
-
----
-
-### User Posts
-
-Get user posts with pagination and sorting.
-
-**Endpoint:** `GET /api/user/posts/:username`
-
-**URL Parameters:**
-- `username` (string, required) - Instagram username
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
 
 **Query Parameters:**
-- `page` (number, optional, default: 1) - Page number
-- `limit` (number, optional, default: 20, max: 100) - Items per page
-- `sortBy` (string, optional, default: '-instagram_data.posted_at') - Sort field
-  - Options: `createdAt`, `-createdAt`, `likes_count`, `-likes_count`, `comments_count`, `-comments_count`
+- None
 
-**Example Request:**
-```bash
-GET /api/user/posts/cristiano?page=1&limit=10&sortBy=-likes_count
-```
-
-**Success Response:**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "Posts for @cristiano",
+  "message": "User validated and data scraped successfully",
+  "data": {
+    "username": "example_user",
+    "full_name": "Example User",
+    "followers_count": 1000,
+    "following_count": 500,
+    "posts_count": 50,
+    "is_verified": false,
+    "profile_picture_url": "https://...",
+    "bio_text": "Bio text here",
+    "website_url": "https://...",
+    "account_type": "personal"
+  },
+  "scraped": true
+}
+```
+
+**Special Notes:**
+- Rate limited to 20 requests per hour
+- Automatically scrapes data if user not found in database
+- Username is normalized (lowercase, @ removed)
+
+### Scrape User Data
+**POST** `/api/user/scrape/:username`
+
+Force scrape user data from Instagram.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User data scraped successfully",
+  "data": {
+    "username": "example_user",
+    "full_name": "Example User",
+    "followers_count": 1000,
+    "following_count": 500,
+    "posts_count": 50
+  }
+}
+```
+
+**Special Notes:**
+- Rate limited to 20 requests per hour
+- Forces fresh data scrape from Instagram
+
+### Get User Profile
+**GET** `/api/user/profile/:username`
+
+Get user profile information from database.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Profile for @example_user",
+  "data": {
+    "_id": "user_id",
+    "username": "example_user",
+    "full_name": "Example User",
+    "followers_count": 1000,
+    "following_count": 500,
+    "posts_count": 50,
+    "is_verified": false,
+    "profile_picture_url": "https://...",
+    "bio_text": "Bio text here",
+    "website_url": "https://...",
+    "account_type": "personal",
+    "scraped_at": "2025-10-03T22:00:00.000Z"
+  }
+}
+```
+
+---
+
+## Content Endpoints
+
+### Get User Posts
+**GET** `/api/user/posts/:username`
+
+Get user posts with pagination.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Query Parameters:**
+- `page` (number, optional): Page number (default: 1)
+- `limit` (number, optional): Posts per page (1-100, default: 20)
+- `sortBy` (string, optional): Sort field (`createdAt`, `-createdAt`, `likes_count`, `-likes_count`, `comments_count`, `-comments_count`)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Posts for @example_user",
   "data": [
     {
-      "post_id": "ABC123XYZ",
-      "post_url": "https://instagram.com/p/ABC123XYZ",
-      "image_url": "https://instagram.com/...",
+      "post_id": "post_id_123",
+      "post_url": "https://instagram.com/p/ABC123",
+      "image_url": "https://...",
       "video_url": null,
-      "caption": "Great match today! ⚽️",
-      "likes_count": 15000000,
-      "comments_count": 250000,
-      "post_date": "2025-09-30T18:00:00.000Z",
-      "post_type": "photo",
-      "hashtags": ["#football", "#soccer"]
+      "caption": "Post caption",
+      "likes_count": 100,
+      "comments_count": 10,
+      "post_date": "2025-10-01T12:00:00.000Z",
+      "post_type": "image",
+      "hashtags": ["tag1", "tag2"]
     }
-    // ... more posts
   ],
   "pagination": {
     "page": 1,
-    "limit": 10,
-    "total": 3500,
-    "totalPages": 350,
-    "hasNext": true,
-    "hasPrev": false
+    "limit": 20,
+    "total": 50,
+    "totalPages": 3
   }
 }
 ```
 
-**Status Codes:**
-- `200` - Success
-- `400` - Invalid parameters
-- `404` - User not found in database
+### Get User Reels
+**GET** `/api/user/reels/:username`
 
----
+Get user reels with pagination.
 
-### User Reels
-
-Get user reels with pagination and sorting.
-
-**Endpoint:** `GET /api/user/reels/:username`
-
-**URL Parameters:**
-- `username` (string, required) - Instagram username
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
 
 **Query Parameters:**
-- `page` (number, optional, default: 1) - Page number
-- `limit` (number, optional, default: 20, max: 100) - Items per page
-- `sortBy` (string, optional, default: '-instagram_data.posted_at') - Sort field
-  - Options: `createdAt`, `-createdAt`, `likes_count`, `-likes_count`, `views_count`, `-views_count`
+- `page` (number, optional): Page number (default: 1)
+- `limit` (number, optional): Reels per page (1-100, default: 20)
+- `sortBy` (string, optional): Sort field (`createdAt`, `-createdAt`, `likes_count`, `-likes_count`, `views_count`, `-views_count`)
 
-**Example Request:**
-```bash
-GET /api/user/reels/cristiano?page=1&limit=10&sortBy=-views_count
-```
-
-**Success Response:**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "Reels for @cristiano",
+  "message": "Reels for @example_user",
   "data": [
     {
-      "reel_id": "XYZ789ABC",
-      "reel_url": "https://instagram.com/reel/XYZ789ABC",
-      "thumbnail_url": "https://instagram.com/...",
-      "video_url": "https://instagram.com/...",
-      "caption": "Behind the scenes 🎬",
-      "views_count": 50000000,
-      "likes_count": 8000000,
-      "comments_count": 150000,
-      "post_date": "2025-09-28T12:00:00.000Z",
-      "duration_seconds": 30
+      "reel_id": "reel_id_123",
+      "reel_url": "https://instagram.com/reel/ABC123",
+      "thumbnail_url": "https://...",
+      "video_url": "https://...",
+      "caption": "Reel caption",
+      "views_count": 5000,
+      "likes_count": 200,
+      "comments_count": 20,
+      "post_date": "2025-10-01T12:00:00.000Z",
+      "duration_seconds": 15
     }
-    // ... more reels
   ],
   "pagination": {
     "page": 1,
-    "limit": 10,
-    "total": 150,
-    "totalPages": 15,
-    "hasNext": true,
-    "hasPrev": false
+    "limit": 20,
+    "total": 25,
+    "totalPages": 2
   }
 }
 ```
 
-**Status Codes:**
-- `200` - Success
-- `400` - Invalid parameters
-- `404` - User not found in database
+### Get Posts URLs
+**GET** `/api/user/posts-urls/:username`
 
----
+Get posts URLs for a user and store in MongoDB.
 
-### Post Analytics
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
 
-Get AI/ML-powered post analytics including image analysis, keywords, vibe classification, and quality scores.
-
-**Endpoint:** `GET /api/user/analytics/posts/:username`
-
-**URL Parameters:**
-- `username` (string, required) - Instagram username
-
-**Prerequisites:**
-- ML Backend service must be running at `http://127.0.0.1:5000`
-- User must have posts in the database
-
-**Example Request:**
-```bash
-GET /api/user/analytics/posts/cristiano
-```
-
-**Success Response:**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "Post analytics for @cristiano",
+  "message": "Posts URLs retrieved and stored for @example_user",
   "data": {
-    "username": "cristiano",
-    "profile_id": "507f1f77bcf86cd799439011",
-    "analytics": [
-      {
-        "post_id": "ABC123XYZ",
-        "content_categories": ["sports", "football", "action"],
-        "vibe_classification": "energetic, professional",
-        "quality_score": 9.2,
-        "lighting_score": 8.5,
-        "visual_appeal_score": 9.0,
-        "consistency_score": 8.8,
-        "keywords": ["football", "stadium", "celebration", "team"]
+    "username": "example_user",
+    "profile_id": "user_id",
+    "urls": [
+      "https://instagram.com/p/ABC123",
+      "https://instagram.com/p/DEF456"
+    ],
+    "total_urls": 2
+  }
+}
+```
+
+### Get Reels URLs
+**GET** `/api/user/reels-urls/:username`
+
+Get reels URLs for a user and store in MongoDB.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Reels URLs retrieved and stored for @example_user",
+  "data": {
+    "username": "example_user",
+    "profile_id": "user_id",
+    "urls": [
+      "https://instagram.com/reel/ABC123",
+      "https://instagram.com/reel/DEF456"
+    ],
+    "total_urls": 2
+  }
+}
+```
+
+---
+
+## Analytics Endpoints
+
+### Get Post Analytics
+**GET** `/api/user/analytics/posts/:username`
+
+Get post analytics (AI/ML analysis).
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Post analytics for @example_user",
+  "data": [
+    {
+      "post_id": "post_id_123",
+      "content_categories": ["fashion", "lifestyle"],
+      "vibe_classification": "energetic, aesthetic",
+      "quality_score": 85,
+      "lighting_score": 8.5,
+      "visual_appeal_score": 9.0,
+      "consistency_score": 8.0,
+      "keywords": ["fashion", "lifestyle", "aesthetic"],
+      "caption": "Post caption",
+      "num_people": 1,
+      "ambience": ["energetic", "aesthetic"],
+      "image_dimensions": {
+        "width": 1080,
+        "height": 1350
       }
-      // ... more analytics
-    ],
-    "total_analyzed": 12,
-    "analyzed_at": "2025-10-01T11:00:00.000Z"
-  }
-}
-```
-
-**Error Response (ML API Unavailable):**
-```json
-{
-  "success": false,
-  "message": "Failed to analyze posts for @cristiano",
-  "error": {
-    "type": "ML_API_ERROR",
-    "message": "ML API call failed",
-    "imageUrls": ["https://..."],
-    "mlApiUrl": "http://127.0.0.1:5000/analyze"
-  }
-}
-```
-
-**Status Codes:**
-- `200` - Success (including cached results)
-- `400` - Invalid username
-- `404` - User not found in database
-- `500` - ML API error
-
-**Notes:**
-- Analytics are cached after first generation
-- ML API must be running separately
-- Processing time depends on number of posts
-
----
-
-### Reel Analytics
-
-Get reel analytics (placeholder - under development).
-
-**Endpoint:** `GET /api/user/analytics/reels/:username`
-
-**URL Parameters:**
-- `username` (string, required) - Instagram username
-
-**Example Request:**
-```bash
-GET /api/user/analytics/reels/cristiano
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Reel analytics for @cristiano (placeholder)",
-  "data": {
-    "message": "Reel analytics feature is under development",
-    "features": [
-      "Video analysis using AI/ML",
-      "Engagement analysis",
-      "Performance metrics",
-      "Content insights"
-    ],
-    "status": "coming_soon"
-  }
-}
-```
-
-**Status Codes:**
-- `200` - Success (placeholder response)
-
----
-
-### Engagement Metrics
-
-Get user engagement metrics including average likes, comments, and engagement rate.
-
-**Endpoint:** `GET /api/user/engagement/:username`
-
-**URL Parameters:**
-- `username` (string, required) - Instagram username
-
-**Example Request:**
-```bash
-GET /api/user/engagement/cristiano
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Engagement metrics for @cristiano",
-  "data": {
-    "avg_likes": 12500000,
-    "avg_comments": 180000,
-    "engagement_rate": 2.11
-  }
-}
-```
-
-**Calculation Logic:**
-- `avg_likes` = Total likes across all posts and reels / Total content count
-- `avg_comments` = Total comments across all posts and reels / Total content count
-- `engagement_rate` = ((Total likes + Total comments) / Total content) / Followers count * 100
-
-**Status Codes:**
-- `200` - Success
-- `400` - Invalid username
-- `404` - User not found in database
-
----
-
-## Legacy Endpoints
-
-The following endpoints are maintained for backward compatibility but are deprecated:
-
-### Legacy User Endpoint
-**Endpoint:** `GET /api/user/:username`  
-**Redirect:** Uses validate logic internally  
-**Status:** Deprecated, use `/api/user/validate/:username` instead
-
-### Legacy Posts Endpoint
-**Endpoint:** `GET /api/user/:username/posts`  
-**Redirect:** Uses posts logic internally  
-**Status:** Deprecated, use `/api/user/posts/:username` instead
-
-### Legacy Analytics Endpoint
-**Endpoint:** `GET /api/user/:username/analytics`  
-**Redirect:** Uses profile logic internally  
-**Status:** Deprecated, use `/api/user/profile/:username` instead
-
----
-
-## Data Models
-
-### Profile Model
-```typescript
-{
-  _id: ObjectId,
-  username: string,              // lowercase, unique
-  full_name: string,
-  profile_picture_url: string,
-  bio_text: string,
-  website_url: string,
-  is_verified: boolean,
-  account_type: 'personal' | 'business' | 'creator',
-  followers_count: number,
-  following_count: number,
-  posts_count: number,
-  scraped_at: Date,
-  createdAt: Date,
-  updatedAt: Date
-}
-```
-
-### Post Model
-```typescript
-{
-  _id: ObjectId,
-  username: string,
-  profile_id: ObjectId,          // Reference to Profile
-  posts: [
-    {
-      post_id: string,
-      post_url: string,
-      image_url: string,
-      video_url: string | null,
-      caption: string,
-      likes_count: number,
-      comments_count: number,
-      post_date: Date,
-      post_type: 'photo' | 'video' | 'carousel',
-      hashtags: string[]
     }
-  ],
-  total_posts: number,
-  scraped_at: Date,
-  createdAt: Date,
-  updatedAt: Date
-}
-```
-
-### Reel Model
-```typescript
-{
-  _id: ObjectId,
-  username: string,
-  profile_id: ObjectId,          // Reference to Profile
-  reels: [
-    {
-      reel_id: string,
-      reel_url: string,
-      thumbnail_url: string,
-      video_url: string,
-      caption: string,
-      views_count: number,
-      likes_count: number,
-      comments_count: number,
-      post_date: Date,
-      duration_seconds: number
-    }
-  ],
-  total_reels: number,
-  scraped_at: Date,
-  createdAt: Date,
-  updatedAt: Date
-}
-```
-
-### Post AI Analysis Model
-```typescript
-{
-  _id: ObjectId,
-  username: string,
-  profile_id: ObjectId,          // Reference to Profile
-  analytics: [
-    {
-      post_id: string,
-      content_categories: string[],
-      vibe_classification: string,
-      quality_score: number,     // 0-10
-      lighting_score: number,    // 0-10
-      visual_appeal_score: number, // 0-10
-      consistency_score: number,  // 0-10
-      keywords: string[]
-    }
-  ],
-  total_analyzed: number,
-  analyzed_at: Date,
-  createdAt: Date,
-  updatedAt: Date
-}
-```
-
----
-
-## Status Codes
-
-| Code | Description |
-|------|-------------|
-| `200` | OK - Request successful |
-| `400` | Bad Request - Invalid parameters or validation error |
-| `404` | Not Found - Resource not found |
-| `408` | Request Timeout - Request to Instagram timed out |
-| `429` | Too Many Requests - Rate limit exceeded |
-| `500` | Internal Server Error - Server error |
-| `503` | Service Unavailable - External service unavailable |
-
----
-
-## Instagram API Limitations
-
-⚠️ **Important:** This API uses Instagram's public web interface, which has significant limitations:
-
-### Current Limitations
-1. **Posts Limit:** Only the first 12 posts are accessible via public API
-2. **Private Accounts:** Cannot access data from private accounts
-3. **Rate Limiting:** Instagram may block requests if too many are made
-4. **Data Freshness:** Data is cached to respect rate limits (4-hour cooldown)
-
-### Total Posts vs Available Posts
-When you scrape a user:
-- `totalPostsReported` - Total posts the user has on Instagram
-- `postsAvailable` - Number of posts actually scraped (max 12)
-
-### Recommendations for Complete Data
-For production use with full data access, consider:
-1. **Instagram Graph API** - Official API requiring business account and app review
-2. **Instagram Basic Display API** - For user's own content only
-3. **Third-party Services** - Paid services with better data access
-4. **Instaloader/Instagram-Scraper** - Open-source scraping tools (use responsibly)
-
----
-
-## ML Backend Integration
-
-The Post Analytics endpoint requires a separate ML backend service running at `http://127.0.0.1:5000`.
-
-### ML API Endpoint
-**URL:** `POST http://127.0.0.1:5000/analyze`
-
-**Request:**
-```json
-{
-  "urls": [
-    "https://instagram.com/image1.jpg",
-    "https://instagram.com/image2.jpg"
   ]
+}
+```
+
+### Get Reel Analytics
+**GET** `/api/user/analytics/reels/:username`
+
+Get reel analytics (AI/ML analysis).
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Reel analytics for @example_user",
+  "data": [
+    {
+      "reel_id": "reel_id_123",
+      "content_categories": ["dance", "music"],
+      "vibe_classification": "energetic, night",
+      "quality_score": 90,
+      "events_objects": ["dance", "music"],
+      "descriptive_tags": ["energetic", "night", "dance"]
+    }
+  ]
+}
+```
+
+### Get User Engagement Metrics
+**GET** `/api/user/engagement/:username`
+
+Get user engagement metrics (avg likes, avg comments, engagement rate).
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Engagement metrics for @example_user",
+  "data": {
+    "total_likes": 5000,
+    "total_comments": 500,
+    "total_views": 25000,
+    "avg_likes": 100,
+    "avg_comments": 10,
+    "engagement_rate": 5.5,
+    "posts_count": 50,
+    "last_updated": "2025-10-03T22:00:00.000Z",
+    "calculated_at": "2025-10-03T22:00:00.000Z"
+  }
+}
+```
+
+---
+
+## Advanced Analytics Endpoints
+
+### Likes vs Comments Analytics
+**GET** `/api/analytics/likesvscomments/:username`
+
+Get detailed likes vs comments analytics.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Likes vs comments analytics for @example_user",
+  "data": {
+    "total_posts": 50,
+    "total_reels": 25,
+    "total_content": 75,
+    "posts_data": [
+      {
+        "type": "post",
+        "likes": 100,
+        "comments": 10,
+        "date": "2025-10-01T12:00:00.000Z"
+      }
+    ],
+    "reels_data": [
+      {
+        "type": "reel",
+        "likes": 200,
+        "comments": 20,
+        "date": "2025-10-01T12:00:00.000Z"
+      }
+    ],
+    "summary": {
+      "total_likes": 7500,
+      "total_comments": 750,
+      "avg_likes_per_post": 100,
+      "avg_comments_per_post": 10,
+      "avg_likes_per_reel": 200,
+      "avg_comments_per_reel": 20
+    }
+  }
+}
+```
+
+### Engagement Rate Analytics
+**GET** `/api/analytics/engagement/:username`
+
+Get engagement rate analytics.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Engagement rate analytics for @example_user",
+  "data": {
+    "engagement_rate": 5.5,
+    "followers_count": 1000,
+    "total_engagement": 8250,
+    "total_content": 75,
+    "posts_engagement": 5500,
+    "reels_engagement": 2750,
+    "posts_count": 50,
+    "reels_count": 25,
+    "engagement_per_content": 110,
+    "engagement_rate_percentage": 0.55
+  }
+}
+```
+
+### Content Analysis (AI-Powered)
+**GET** `/api/analytics/contentanalysis/content/:username`
+
+Get content analysis via Grok AI API.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Content analysis for @example_user",
+  "data": {
+    "total_tags": 150,
+    "unique_tags": 45,
+    "all_tags": ["fashion", "lifestyle", "travel"],
+    "grok_analysis": {
+      "tags": [
+        {"tag": "lifestyle", "percentage": 35.2},
+        {"tag": "fashion", "percentage": 28.7},
+        {"tag": "travel", "percentage": 15.3},
+        {"tag": "miscellaneous", "percentage": 20.8}
+      ]
+    },
+    "posts_analyzed": 12,
+    "reels_analyzed": 8
+  }
+}
+```
+
+**Special Notes:**
+- Uses Grok AI API for intelligent content analysis
+- Returns JSON-formatted analysis
+- No caching - always fresh analysis
+
+### Vibe Analysis (AI-Powered)
+**GET** `/api/analytics/contentanalysis/vibe/:username`
+
+Get vibe analysis via Grok AI API.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Vibe analysis for @example_user",
+  "data": {
+    "total_vibes": 20,
+    "unique_vibes": 14,
+    "all_vibes": ["energetic, aesthetic", "casual, daytime"],
+    "grok_analysis": {
+      "vibes": [
+        {"vibe": "energetic", "percentage": 40.0},
+        {"vibe": "casual", "percentage": 30.0},
+        {"vibe": "aesthetic", "percentage": 20.0},
+        {"vibe": "miscellaneous", "percentage": 10.0}
+      ]
+    },
+    "posts_analyzed": 12,
+    "reels_analyzed": 8
+  }
+}
+```
+
+**Special Notes:**
+- Uses Grok AI API for intelligent vibe analysis
+- Returns JSON-formatted analysis
+- No caching - always fresh analysis
+
+### Top Tags Analytics
+**GET** `/api/analytics/contentanalysis/top-tags/:username`
+
+Get top 10 tags by percentage (no AI/LLM).
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Top tags for @example_user",
+  "data": {
+    "total_tags": 150,
+    "unique_tags": 45,
+    "top_tags": [
+      {"tag": "lifestyle", "count": 25, "percentage": 16.67},
+      {"tag": "fashion", "count": 20, "percentage": 13.33},
+      {"tag": "travel", "count": 15, "percentage": 10.00}
+    ],
+    "posts_analyzed": 12,
+    "reels_analyzed": 8
+  }
+}
+```
+
+### Performance PQ vs Engagement
+**GET** `/api/analytics/performance/pqvsengagement/:username`
+
+Get performance PQ vs engagement analytics.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Performance PQ vs engagement for @example_user",
+  "data": {
+    "total_analyzed": 20,
+    "posts_analyzed": 12,
+    "reels_analyzed": 8,
+    "data": [
+      {
+        "type": "post",
+        "id": "post_id_123",
+        "quality_score": 85,
+        "engagement": 110,
+        "engagement_rate": 1.1,
+        "likes": 100,
+        "comments": 10
+      }
+    ],
+    "summary": {
+      "avg_quality_score": 82,
+      "avg_engagement_rate": 1.05,
+      "avg_engagement": 125
+    }
+  }
+}
+```
+
+### Quality Indicators
+**GET** `/api/analytics/performance/quality/:username`
+
+Get quality indicators analytics.
+
+**Parameters:**
+- `username` (string, required): Instagram username (without @)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Quality indicators for @example_user",
+  "data": {
+    "total_analyzed": 20,
+    "posts_analyzed": 12,
+    "reels_analyzed": 8,
+    "quality_indicators": {
+      "avg_quality_score": 82,
+      "avg_lighting_score": 8.2,
+      "avg_visual_appeal_score": 8.5,
+      "avg_consistency_score": 8.0
+    },
+    "score_breakdown": {
+      "quality_scores": [85, 80, 90],
+      "lighting_scores": [8.5, 8.0, 9.0],
+      "visual_appeal_scores": [9.0, 8.5, 8.0],
+      "consistency_scores": [8.0, 8.5, 7.5]
+    }
+  }
+}
+```
+
+---
+
+## Utility Endpoints
+
+### Image Proxy
+**POST** `/api/proxy-image`
+
+Download and save images from URLs.
+
+**Request Body:**
+```json
+{
+  "imageUrl": "https://example.com/image.jpg",
+  "filename": "image.jpg",
+  "folder": "posts"
 }
 ```
 
 **Response:**
 ```json
 {
-  "results": {
-    "0": {
-      "keywords": ["football", "stadium"],
-      "vibe": ["energetic", "professional"],
-      "quality": {
-        "visual_appeal": 9.2,
-        "lighting": "good",
-        "consistency": 8.8
-      }
-    }
-  }
+  "success": true,
+  "localPath": "/images/posts/image.jpg",
+  "message": "Image downloaded successfully"
+}
+```
+
+**Special Notes:**
+- Downloads images to frontend public folder
+- Creates directories if they don't exist
+- Returns local path for frontend use
+
+---
+
+## Error Responses
+
+All endpoints return consistent error responses:
+
+**400 Bad Request:**
+```json
+{
+  "success": false,
+  "message": "Error message here",
+  "statusCode": 400
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "success": false,
+  "message": "User not found",
+  "statusCode": 404
+}
+```
+
+**429 Rate Limit Exceeded:**
+```json
+{
+  "success": false,
+  "statusCode": 429,
+  "message": "Instagram API rate limit exceeded. Please try again in an hour."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "success": false,
+  "message": "Internal server error",
+  "statusCode": 500
 }
 ```
 
 ---
 
-## Security Headers
+## Rate Limiting
 
-The API implements several security measures:
+| Endpoint Type | Limit | Window |
+|---------------|-------|---------|
+| Instagram Scraping | 20 requests | 1 hour |
+| Other Endpoints | No limit | - |
 
-### Helmet.js Security Headers
-- Content Security Policy disabled for media loading
-- Cross-Origin Embedder Policy disabled
-
-### CORS Configuration
-- **Allowed Origins:** All origins (development mode)
-- **Credentials:** Enabled
-- **Methods:** GET, POST, PUT, DELETE, OPTIONS, PATCH
-- **Allowed Headers:** Content-Type, Authorization, X-Requested-With, Accept, Origin
-- **Exposed Headers:** X-Request-ID
+**Rate Limited Endpoints:**
+- `/api/user/validate/:username`
+- `/api/user/scrape/:username`
 
 ---
 
-## Request ID Tracking
+## Special Features
 
-Every request receives a unique request ID in the response headers:
-```
-X-Request-ID: abc123xyz456
-```
+### Username Validation
+- All endpoints automatically normalize usernames (lowercase, remove @)
+- Username length validation (1-30 characters)
+- Automatic cleanup of invalid characters
 
-Use this ID for debugging and tracking requests in logs.
+### Pagination
+- Available on posts and reels endpoints
+- Default: page 1, limit 20
+- Maximum limit: 100 items per page
 
----
+### AI Integration
+- Content and vibe analysis use Grok AI API
+- Real-time analysis (no caching)
+- JSON-formatted responses
 
-## Example Frontend Integration (JavaScript)
-
-### Fetch User Profile
-```javascript
-async function getUserProfile(username) {
-  try {
-    const response = await fetch(`http://localhost:8000/api/user/validate/${username}`);
-    const data = await response.json();
-    
-    if (data.success) {
-      console.log('Profile:', data.data);
-      return data.data;
-    } else {
-      console.error('Error:', data.message);
-    }
-  } catch (error) {
-    console.error('Network error:', error);
-  }
-}
-```
-
-### Fetch User Posts with Pagination
-```javascript
-async function getUserPosts(username, page = 1, limit = 20) {
-  try {
-    const response = await fetch(
-      `http://localhost:8000/api/user/posts/${username}?page=${page}&limit=${limit}&sortBy=-likes_count`
-    );
-    const data = await response.json();
-    
-    if (data.success) {
-      console.log('Posts:', data.data);
-      console.log('Pagination:', data.pagination);
-      return data;
-    } else {
-      console.error('Error:', data.message);
-    }
-  } catch (error) {
-    console.error('Network error:', error);
-  }
-}
-```
-
-### Fetch Post Analytics
-```javascript
-async function getPostAnalytics(username) {
-  try {
-    const response = await fetch(
-      `http://localhost:8000/api/user/analytics/posts/${username}`
-    );
-    const data = await response.json();
-    
-    if (data.success) {
-      console.log('Analytics:', data.data.analytics);
-      return data.data;
-    } else {
-      console.error('Error:', data.message);
-    }
-  } catch (error) {
-    console.error('Network error:', error);
-  }
-}
-```
-
-### Fetch Engagement Metrics
-```javascript
-async function getEngagementMetrics(username) {
-  try {
-    const response = await fetch(
-      `http://localhost:8000/api/user/engagement/${username}`
-    );
-    const data = await response.json();
-    
-    if (data.success) {
-      console.log('Engagement:', data.data);
-      return data.data;
-    } else {
-      console.error('Error:', data.message);
-    }
-  } catch (error) {
-    console.error('Network error:', error);
-  }
-}
-```
-
----
-
-## Example Frontend Integration (React)
-
-### Custom Hook for API Calls
-```javascript
-import { useState, useEffect } from 'react';
-
-const API_BASE_URL = 'http://localhost:8000/api';
-
-export function useUserProfile(username) {
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (!username) return;
-
-    async function fetchProfile() {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/user/validate/${username}`);
-        const data = await response.json();
-        
-        if (data.success) {
-          setProfile(data.data);
-        } else {
-          setError(data.message);
-        }
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchProfile();
-  }, [username]);
-
-  return { profile, loading, error };
-}
-
-export function useUserPosts(username, page = 1, limit = 20) {
-  const [posts, setPosts] = useState([]);
-  const [pagination, setPagination] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (!username) return;
-
-    async function fetchPosts() {
-      try {
-        setLoading(true);
-        const response = await fetch(
-          `${API_BASE_URL}/user/posts/${username}?page=${page}&limit=${limit}`
-        );
-        const data = await response.json();
-        
-        if (data.success) {
-          setPosts(data.data);
-          setPagination(data.pagination);
-        } else {
-          setError(data.message);
-        }
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchPosts();
-  }, [username, page, limit]);
-
-  return { posts, pagination, loading, error };
-}
-```
-
----
-
-## Support & Issues
-
-For issues, questions, or feature requests, please contact the development team or create an issue in the project repository.
-
----
-
-## Changelog
-
-### Version 1.0.0 (Current)
-- Initial API release
-- User validation and scraping
-- Posts and reels retrieval with pagination
-- Post analytics with ML integration
-- Engagement metrics calculation
-- Rate limiting and caching
-- Comprehensive error handling
-
----
-
-**Last Updated:** October 1, 2025  
-**API Version:** 1.0.0  
-**Author:** Instagram Dashboard Team
-
+### Data Storage
+- MongoDB for all data persistence
+- Automatic data scraping from Instagram
+- URL collection and storage

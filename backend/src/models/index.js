@@ -11,6 +11,7 @@ const CommentSchema = require('./comment');
 const EngagementSnapshotSchema = require('./engagementSnapshot');
 const PostUrlsSchema = require('./postUrls');
 const ReelUrlsSchema = require('./reelUrls');
+const AnalyticsDataSchema = require('./analyticsData');
 
 // Create models from schemas
 const InstagramData = mongoose.model('InstagramData', InstagramDataSchema);
@@ -23,6 +24,7 @@ const Comment = mongoose.model('Comment', CommentSchema);
 const EngagementSnapshot = mongoose.model('EngagementSnapshot', EngagementSnapshotSchema);
 const PostUrls = mongoose.model('PostUrls', PostUrlsSchema);
 const ReelUrls = mongoose.model('ReelUrls', ReelUrlsSchema);
+const AnalyticsData = mongoose.model('AnalyticsData', AnalyticsDataSchema);
 
 // Export models and mongoose instance
 const db = {
@@ -36,7 +38,8 @@ const db = {
   Comment,
   EngagementSnapshot,
   PostUrls,
-  ReelUrls
+  ReelUrls,
+  AnalyticsData
 };
 
 module.exports = db;

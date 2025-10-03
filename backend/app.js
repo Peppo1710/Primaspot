@@ -14,6 +14,7 @@ const dbConnection = require('./config/database');
 // Import routes
 const userRoutes = require('./src/routes/userRoutes');
 const imageProxyRoutes = require('./src/routes/imageProxy');
+const analyticsRoutes = require('./src/routes/analyticsRoutes');
 
 const app = express();
 const port = process.env.PORT || 8001;
@@ -98,6 +99,9 @@ app.get('/api', (req, res) => {
 app.use('/api/user', userRoutes);
 app.use('/api/users', userRoutes);
 
+// Mount analytics routes
+app.use('/api/analytics', analyticsRoutes);
+
 // Mount image proxy route
 app.use('/api', imageProxyRoutes);
 
@@ -130,7 +134,7 @@ app.use(errorHandler);
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
-  logger.info('🔄 Gracefully shutting down server...');
+  logger.info('Gracefully shutting down server...');
   await dbConnection.gracefulShutdown();
   process.exit(0);
 };
@@ -155,7 +159,7 @@ const startServer = async () => {
     await dbConnection.initialize();
 
     const server = app.listen(port, () => {
-      logger.info(`🚀 Instagram Dashboard API Server started on port ${port}`);
+      logger.info(`Instagram Dashboard API Server started on port ${port}`);
       
       if (process.env.NODE_ENV === 'development') {
         logger.info(`API Documentation: http://localhost:${port}/api/docs`);

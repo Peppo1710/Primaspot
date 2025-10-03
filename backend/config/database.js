@@ -26,11 +26,11 @@ async function connect() {
     isConnected = true;
     state = 'authenticated';
     
-    console.log('✅ MongoDB connected successfully');
+    console.log('MongoDB connected successfully');
   } catch (error) {
     isConnected = false;
     state = 'error';
-    console.error('❌ MongoDB connection error:', error.message);
+    console.error('MongoDB connection error:', error.message);
     console.error('💡 Make sure MongoDB is running and MONGODB_URI is set correctly');
     throw error;
   }
@@ -82,9 +82,16 @@ async function initialize() {
     await db.collection('reel_urls').createIndex({ profile_id: 1 });
     await db.collection('reel_urls').createIndex({ created_at: -1 });
     
-    console.log('✅ MongoDB indexes created successfully');
+    // Analytics Data collection indexes
+    await db.collection('analytics_data').createIndex({ username: 1 });
+    await db.collection('analytics_data').createIndex({ analytics_type: 1 });
+    await db.collection('analytics_data').createIndex({ username: 1, analytics_type: 1 }, { unique: true });
+    await db.collection('analytics_data').createIndex({ profile_id: 1 });
+    await db.collection('analytics_data').createIndex({ calculated_at: -1 });
+    
+    console.log('MongoDB indexes created successfully');
   } catch (error) {
-    console.error('❌ MongoDB initialization error:', error.message);
+    console.error('MongoDB initialization error:', error.message);
     throw error;
   }
 }
@@ -108,11 +115,11 @@ async function gracefulShutdown() {
       await mongoose.connection.close();
       isConnected = false;
       state = 'closed';
-      console.log('✅ MongoDB connection closed');
+      console.log('MongoDB connection closed');
     }
   } catch (error) {
     state = 'error';
-    console.error('❌ MongoDB shutdown error:', error.message);
+    console.error('MongoDB shutdown error:', error.message);
   }
 }
 
@@ -124,7 +131,7 @@ mongoose.connection.on('connected', () => {
 });
 
 mongoose.connection.on('error', (error) => {
-  console.error('❌ MongoDB error:', error);
+  console.error('MongoDB error:', error);
   isConnected = false;
   state = 'error';
 });
