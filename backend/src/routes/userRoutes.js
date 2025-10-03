@@ -139,6 +139,28 @@ router.get('/engagement/:username', validateUsername, (req, res, next) => {
 });
 
 // ========================================
+// URL COLLECTION ROUTES
+// ========================================
+
+/**
+ * @route   GET /api/user/posts-urls/:username
+ * @desc    Get posts URLs for a user and store in MongoDB
+ * @access  Public
+ */
+router.get('/posts-urls/:username', validateUsername, (req, res, next) => {
+  userController.getPostsUrls(req, res, next);
+});
+
+/**
+ * @route   GET /api/user/reels-urls/:username
+ * @desc    Get reels URLs for a user and store in MongoDB
+ * @access  Public
+ */
+router.get('/reels-urls/:username', validateUsername, (req, res, next) => {
+  userController.getReelsUrls(req, res, next);
+});
+
+// ========================================
 // LEGACY ROUTES (for backward compatibility)
 // ========================================
 

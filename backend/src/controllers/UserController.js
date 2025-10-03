@@ -17,6 +17,8 @@ class UserController {
     this.getPostAnalytics = this.getPostAnalytics.bind(this);
     this.getReelAnalytics = this.getReelAnalytics.bind(this);
     this.getUserEngagementMetrics = this.getUserEngagementMetrics.bind(this);
+    this.getPostsUrls = this.getPostsUrls.bind(this);
+    this.getReelsUrls = this.getReelsUrls.bind(this);
   }
 
   /**
@@ -384,6 +386,14 @@ class UserController {
         });
       }
 
+      console.log("imageUrls", imageUrls);
+      console.log('type of imageUrls:', typeof imageUrls);
+console.log('Array.isArray(imageUrls):', Array.isArray(imageUrls));
+console.log('imageUrls length:', imageUrls && imageUrls.length);
+console.log('first item type:', imageUrls && typeof imageUrls[0]);
+
+      
+
       // Call ML API
       const mlApiUrl = 'http://127.0.0.1:5000/analyze';
       logger.info(`Calling ML API with ${imageUrls.length} image URLs:`, imageUrls);
@@ -668,6 +678,212 @@ class UserController {
 
     } catch (error) {
       logger.error(`Error fetching engagement metrics for ${req.params.username}:`, error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get Posts URLs - Extract URLs from posts and store in MongoDB
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next function
+   */
+  async getPostsUrls(req, res, next) {
+    try {
+      const { username } = req.params;
+      
+      if (!username) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username parameter is required'
+        });
+      }
+
+      logger.info(`Fetching posts URLs for user: ${username}`);
+
+      // Check if user exists in database
+      const user = await this.databaseService.findUserByUsername(username);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: `User @${username} not found in database`
+        });
+      }
+
+      // Check if we already have URLs stored for this user
+      const existingUrls = await this.databaseService.getPostsUrlsByUsername(username);
+      
+      if (existingUrls) {
+        logger.info(`Found existing posts URLs for ${username}: ${existingUrls.total_urls} URLs`);
+        
+        // Also get the original posts data
+        const posts = await this.databaseService.getUserPosts(user._id, { limit: 1000 });
+        
+        return res.status(200).json({
+          success: true,
+          message: `Posts URLs for @${username} (from cache)`,
+          data: {
+            urls: existingUrls.urls,
+            total_urls: existingUrls.total_urls,
+            created_at: existingUrls.created_at,
+            posts_data: posts
+          }
+        });
+      }
+
+      // No existing URLs, extract from posts
+      logger.info(`No existing URLs found, extracting from posts for ${username}`);
+      
+      const posts = await this.databaseService.getUserPosts(user._id, { limit: 1000 });
+      
+      if (posts.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: `No posts found for @${username}`,
+          data: {
+            urls: [],
+            total_urls: 0,
+            posts_data: []
+          }
+        });
+      }
+
+      // Extract URLs from posts (image_url and video_url)
+      const urls = [];
+      posts.forEach(post => {
+        if (post.image_url) {
+          urls.push(post.image_url);
+        }
+        if (post.video_url) {
+          urls.push(post.video_url);
+        }
+      });
+
+      // Remove duplicates
+      const uniqueUrls = [...new Set(urls)];
+
+      // Store URLs in database
+      const savedUrls = await this.databaseService.savePostsUrls(user._id, username, uniqueUrls);
+      
+      logger.info(`Successfully extracted and stored ${uniqueUrls.length} unique URLs for ${username}`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Posts URLs extracted and stored for @${username}`,
+        data: {
+          urls: savedUrls.urls,
+          total_urls: savedUrls.total_urls,
+          created_at: savedUrls.created_at,
+          posts_data: posts
+        }
+      });
+
+    } catch (error) {
+      logger.error(`Error fetching posts URLs for ${req.params.username}:`, error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get Reels URLs - Extract URLs from reels and store in MongoDB
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next function
+   */
+  async getReelsUrls(req, res, next) {
+    try {
+      const { username } = req.params;
+      
+      if (!username) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username parameter is required'
+        });
+      }
+
+      logger.info(`Fetching reels URLs for user: ${username}`);
+
+      // Check if user exists in database
+      const user = await this.databaseService.findUserByUsername(username);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: `User @${username} not found in database`
+        });
+      }
+
+      // Check if we already have URLs stored for this user
+      const existingUrls = await this.databaseService.getReelsUrlsByUsername(username);
+      
+      if (existingUrls) {
+        logger.info(`Found existing reels URLs for ${username}: ${existingUrls.total_urls} URLs`);
+        
+        // Also get the original reels data
+        const reels = await this.databaseService.getUserReels(user._id, { limit: 1000 });
+        
+        return res.status(200).json({
+          success: true,
+          message: `Reels URLs for @${username} (from cache)`,
+          data: {
+            urls: existingUrls.urls,
+            total_urls: existingUrls.total_urls,
+            created_at: existingUrls.created_at,
+            reels_data: reels
+          }
+        });
+      }
+
+      // No existing URLs, extract from reels
+      logger.info(`No existing URLs found, extracting from reels for ${username}`);
+      
+      const reels = await this.databaseService.getUserReels(user._id, { limit: 1000 });
+      
+      if (reels.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: `No reels found for @${username}`,
+          data: {
+            urls: [],
+            total_urls: 0,
+            reels_data: []
+          }
+        });
+      }
+
+      // Extract URLs from reels (thumbnail_url and video_url)
+      const urls = [];
+      reels.forEach(reel => {
+        if (reel.thumbnail_url) {
+          urls.push(reel.thumbnail_url);
+        }
+        if (reel.video_url) {
+          urls.push(reel.video_url);
+        }
+      });
+
+      // Remove duplicates
+      const uniqueUrls = [...new Set(urls)];
+
+      // Store URLs in database
+      const savedUrls = await this.databaseService.saveReelsUrls(user._id, username, uniqueUrls);
+      
+      logger.info(`Successfully extracted and stored ${uniqueUrls.length} unique URLs for ${username}`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Reels URLs extracted and stored for @${username}`,
+        data: {
+          urls: savedUrls.urls,
+          total_urls: savedUrls.total_urls,
+          created_at: savedUrls.created_at,
+          reels_data: reels
+        }
+      });
+
+    } catch (error) {
+      logger.error(`Error fetching reels URLs for ${req.params.username}:`, error);
       next(error);
     }
   }

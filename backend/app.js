@@ -115,6 +115,8 @@ app.get('/api/docs', (req, res) => {
       { method: 'GET', path: '/user/validate/:username', description: 'Validate if username exists on Instagram and call central API' },
       { method: 'POST', path: '/user/:username/refresh', description: 'Force refresh user data' },
       { method: 'GET', path: '/user/:username/posts', description: 'Get user posts with pagination' },
+      { method: 'GET', path: '/user/:username/posts-urls', description: 'Get posts URLs and store in MongoDB' },
+      { method: 'GET', path: '/user/:username/reels-urls', description: 'Get reels URLs and store in MongoDB' },
       { method: 'GET', path: '/user/:username/analytics', description: 'Get user analytics data' },
       { method: 'GET', path: '/users/search', description: 'Search users by username' },
       { method: 'GET', path: '/users/top', description: 'Get top influencers' }

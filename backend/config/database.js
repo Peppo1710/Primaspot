@@ -72,6 +72,16 @@ async function initialize() {
     await db.collection('reel_ai_analysis').createIndex({ reel_id: 1 });
     await db.collection('reel_ai_analysis').createIndex({ analyzed_at: -1 });
     
+    // Post URLs collection indexes
+    await db.collection('post_urls').createIndex({ username: 1 });
+    await db.collection('post_urls').createIndex({ profile_id: 1 });
+    await db.collection('post_urls').createIndex({ created_at: -1 });
+    
+    // Reel URLs collection indexes
+    await db.collection('reel_urls').createIndex({ username: 1 });
+    await db.collection('reel_urls').createIndex({ profile_id: 1 });
+    await db.collection('reel_urls').createIndex({ created_at: -1 });
+    
     console.log('✅ MongoDB indexes created successfully');
   } catch (error) {
     console.error('❌ MongoDB initialization error:', error.message);

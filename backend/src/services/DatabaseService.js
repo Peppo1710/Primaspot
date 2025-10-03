@@ -432,22 +432,34 @@ class DatabaseService {
 
   async getReelAnalytics(userId) {
     try {
+      this.logger.info(`Getting reel analytics for user ID: ${userId}`);
+      
       // Get all reels for this user first
-      const userReels = await db.Reels.findOne({ profile_id: userId });
+      const userReels = await db.Reel.findOne({ profile_id: userId });
+      this.logger.info(`Found user reels document:`, userReels ? 'exists' : 'not found');
+      
       if (!userReels || !userReels.reels) {
+        this.logger.info('No reels found for user, returning empty array');
         return [];
       }
       
       const reelIds = userReels.reels.map(reel => reel.reel_id);
+      this.logger.info(`Found ${reelIds.length} reel IDs:`, reelIds);
       
       // Get analytics for all reels
       const analyticsDocs = await db.ReelAiAnalysis
         .find({ reel_id: { $in: reelIds } })
         .lean();
       
+      this.logger.info(`Found ${analyticsDocs.length} analytics documents`);
       return analyticsDocs;
     } catch (error) {
       this.logger.error('Error in getReelAnalytics:', error);
+      this.logger.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       throw new ApiError(500, 'Database error while retrieving reel analytics');
     }
   }
@@ -576,6 +588,88 @@ class DatabaseService {
     } catch (error) {
       this.logger.error('Error in saveReelAnalytics:', error);
       throw new ApiError(500, 'Database error while saving reel analytics');
+    }
+  }
+
+  // ========================================
+  // URL COLLECTION METHODS
+  // ========================================
+
+  async getPostsUrlsByUsername(username) {
+    try {
+      const urlsDoc = await db.PostUrls
+        .findOne({ username: username.toLowerCase() })
+        .lean();
+      
+      return urlsDoc;
+    } catch (error) {
+      this.logger.error('Error in getPostsUrlsByUsername:', error);
+      throw new ApiError(500, 'Database error while retrieving posts URLs');
+    }
+  }
+
+  async getReelsUrlsByUsername(username) {
+    try {
+      const urlsDoc = await db.ReelUrls
+        .findOne({ username: username.toLowerCase() })
+        .lean();
+      
+      return urlsDoc;
+    } catch (error) {
+      this.logger.error('Error in getReelsUrlsByUsername:', error);
+      throw new ApiError(500, 'Database error while retrieving reels URLs');
+    }
+  }
+
+  async savePostsUrls(profileId, username, urls) {
+    try {
+      const filter = { username: username.toLowerCase() };
+      const update = {
+        username: username.toLowerCase(),
+        profile_id: profileId,
+        urls: urls,
+        total_urls: urls.length,
+        created_at: new Date(),
+        updatedAt: new Date()
+      };
+
+      const urlsDoc = await db.PostUrls.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: true, new: true }
+      ).lean();
+
+      this.logger.info(`Saved ${urls.length} posts URLs for ${username}`);
+      return urlsDoc;
+    } catch (error) {
+      this.logger.error('Error in savePostsUrls:', error);
+      throw new ApiError(500, 'Database error while saving posts URLs');
+    }
+  }
+
+  async saveReelsUrls(profileId, username, urls) {
+    try {
+      const filter = { username: username.toLowerCase() };
+      const update = {
+        username: username.toLowerCase(),
+        profile_id: profileId,
+        urls: urls,
+        total_urls: urls.length,
+        created_at: new Date(),
+        updatedAt: new Date()
+      };
+
+      const urlsDoc = await db.ReelUrls.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: true, new: true }
+      ).lean();
+
+      this.logger.info(`Saved ${urls.length} reels URLs for ${username}`);
+      return urlsDoc;
+    } catch (error) {
+      this.logger.error('Error in saveReelsUrls:', error);
+      throw new ApiError(500, 'Database error while saving reels URLs');
     }
   }
 }

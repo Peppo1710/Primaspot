@@ -2,9 +2,9 @@ const mongoose = require('mongoose');
 
 const reelAiAnalysisSchema = new mongoose.Schema({
   reel_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Reel',
+    type: String,
     required: true,
+    maxlength: 50,
     index: true
   },
   content_categories: {

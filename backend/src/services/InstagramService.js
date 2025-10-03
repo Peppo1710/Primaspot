@@ -241,6 +241,41 @@ class InstagramService {
 
       // reels are posts that are video & duration > 0
       const reels = this.extractReelsFromPosts(posts);
+      
+      // Upload reel media to Cloudinary with proper folder structure
+      logger.info(`Uploading ${reels.length} reels to Cloudinary for @${username}`);
+      for (const reel of reels) {
+        try {
+          // Upload reel thumbnail to reels folder
+          if (reel.display_url && !reel.display_url.includes('cloudinary.com')) {
+            logger.info(`Uploading reel thumbnail for ${reel.shortcode} to Cloudinary`);
+            const cloudinaryThumbnailUrl = await this.cloudinary.uploadReelThumbnail(
+              reel.display_url,
+              username,
+              reel.shortcode || reel.instagram_post_id
+            );
+            reel.thumbnail_url = cloudinaryThumbnailUrl;
+            reel.display_url = cloudinaryThumbnailUrl; // Update display_url too
+            logger.info(`Reel thumbnail uploaded: ${cloudinaryThumbnailUrl}`);
+          }
+          
+          // Upload reel video to reels folder (if not already uploaded)
+          if (reel.video_url && !reel.video_url.includes('cloudinary.com')) {
+            logger.info(`Uploading reel video for ${reel.shortcode} to Cloudinary`);
+            const cloudinaryVideoUrl = await this.cloudinary.uploadReelVideo(
+              reel.video_url,
+              username,
+              reel.shortcode || reel.instagram_post_id
+            );
+            reel.video_url = cloudinaryVideoUrl;
+            logger.info(`Reel video uploaded: ${cloudinaryVideoUrl}`);
+          }
+        } catch (uploadError) {
+          logger.error(`Error uploading reel media for ${reel.shortcode}: ${uploadError.message}`);
+          // Continue with next reel even if upload fails
+        }
+      }
+      logger.info(`Completed uploading ${reels.length} reels to Cloudinary for @${username}`);
 
       // analytics computed from transforms
       const analytics = this.calculateAnalytics(profile, posts, reels);
@@ -360,7 +395,26 @@ class InstagramService {
     try {
       return posts
         .filter(post => this.isReel(post))
-        .map(post => ({ ...post, type: 'reel', url: `https://www.instagram.com/reel/${post.shortcode}/` }));
+        .map(post => {
+          // Preserve Cloudinary URLs that were uploaded during post processing
+          const reelData = { 
+            ...post, 
+            type: 'reel', 
+            url: `https://www.instagram.com/reel/${post.shortcode}/` 
+          };
+          
+          // If video_url was uploaded to Cloudinary during post processing, keep it
+          if (post.video_url && post.video_url.includes('cloudinary.com')) {
+            reelData.video_url = post.video_url;
+          }
+          
+          // If thumbnail_url was uploaded to Cloudinary during post processing, keep it
+          if (post.thumbnail_url && post.thumbnail_url.includes('cloudinary.com')) {
+            reelData.thumbnail_url = post.thumbnail_url;
+          }
+          
+          return reelData;
+        });
     } catch (error) {
       logger.error('Error extracting reels:', error);
       return [];

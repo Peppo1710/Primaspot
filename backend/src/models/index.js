@@ -9,6 +9,8 @@ const PostAiAnalysisSchema = require('./postAiAnalysis');
 const ReelAiAnalysisSchema = require('./reelAiAnalysis');
 const CommentSchema = require('./comment');
 const EngagementSnapshotSchema = require('./engagementSnapshot');
+const PostUrlsSchema = require('./postUrls');
+const ReelUrlsSchema = require('./reelUrls');
 
 // Create models from schemas
 const InstagramData = mongoose.model('InstagramData', InstagramDataSchema);
@@ -19,6 +21,8 @@ const PostAiAnalysis = mongoose.model('PostAiAnalysis', PostAiAnalysisSchema);
 const ReelAiAnalysis = mongoose.model('ReelAiAnalysis', ReelAiAnalysisSchema);
 const Comment = mongoose.model('Comment', CommentSchema);
 const EngagementSnapshot = mongoose.model('EngagementSnapshot', EngagementSnapshotSchema);
+const PostUrls = mongoose.model('PostUrls', PostUrlsSchema);
+const ReelUrls = mongoose.model('ReelUrls', ReelUrlsSchema);
 
 // Export models and mongoose instance
 const db = {
@@ -30,7 +34,9 @@ const db = {
   PostAiAnalysis,
   ReelAiAnalysis,
   Comment,
-  EngagementSnapshot
+  EngagementSnapshot,
+  PostUrls,
+  ReelUrls
 };
 
 module.exports = db;
