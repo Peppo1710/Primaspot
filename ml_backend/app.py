@@ -24,6 +24,7 @@ import base64
 import tempfile
 import traceback
 import logging
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from flask import Flask, request, jsonify
@@ -405,7 +406,89 @@ app = Flask(__name__)
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"ok": True, "client_present": client is not None})
+    """Comprehensive health check endpoint"""
+    import psutil
+    import platform
+    
+    health_status = {
+        "status": "healthy",
+        "timestamp": str(datetime.now()),
+        "version": "1.0.0",
+        "services": {}
+    }
+    
+    # Check GenAI client
+    health_status["services"]["genai_client"] = {
+        "status": "ok" if client is not None else "error",
+        "message": "GenAI client initialized" if client is not None else "GenAI client not available"
+    }
+    
+    # Check API key
+    api_key_status = "ok" if API_KEY else "warning"
+    health_status["services"]["api_key"] = {
+        "status": api_key_status,
+        "message": "API key configured" if API_KEY else "API key not set"
+    }
+    
+    # Check model configuration
+    health_status["services"]["model"] = {
+        "status": "ok",
+        "model": MODEL,
+        "message": f"Using model: {MODEL}"
+    }
+    
+    # System information
+    try:
+        health_status["system"] = {
+            "platform": platform.system(),
+            "python_version": platform.python_version(),
+            "memory_usage_percent": psutil.virtual_memory().percent,
+            "cpu_percent": psutil.cpu_percent(interval=1)
+        }
+    except Exception as e:
+        health_status["system"] = {
+            "error": f"System info unavailable: {str(e)}"
+        }
+    
+    # Dependencies check
+    dependencies_status = {}
+    required_modules = ["flask", "requests", "PIL", "cv2", "numpy", "google.genai"]
+    
+    for module in required_modules:
+        try:
+            if module == "PIL":
+                import PIL
+                dependencies_status[module] = {"status": "ok", "version": PIL.__version__}
+            elif module == "cv2":
+                import cv2
+                dependencies_status[module] = {"status": "ok", "version": cv2.__version__}
+            elif module == "numpy":
+                import numpy
+                dependencies_status[module] = {"status": "ok", "version": numpy.__version__}
+            elif module == "google.genai":
+                import google.genai
+                dependencies_status[module] = {"status": "ok", "version": getattr(google.genai, '__version__', 'unknown')}
+            else:
+                __import__(module)
+                dependencies_status[module] = {"status": "ok"}
+        except ImportError as e:
+            dependencies_status[module] = {"status": "error", "message": str(e)}
+    
+    health_status["dependencies"] = dependencies_status
+    
+    # Overall status
+    has_errors = any(
+        service.get("status") == "error" 
+        for service in health_status["services"].values()
+    ) or any(
+        dep.get("status") == "error" 
+        for dep in health_status["dependencies"].values()
+    )
+    
+    health_status["status"] = "healthy" if not has_errors else "degraded"
+    health_status["overall_ok"] = not has_errors
+    
+    return jsonify(health_status), 200 if not has_errors else 503
 
 
 @app.route("/analyze", methods=["POST"])
