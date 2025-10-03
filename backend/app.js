@@ -16,7 +16,7 @@ const userRoutes = require('./src/routes/userRoutes');
 const imageProxyRoutes = require('./src/routes/imageProxy');
 
 const app = express();
-const port = process.env.PORT;
+const port = process.env.PORT || 8001;
 
 // Security middleware
 app.use(helmet({
@@ -37,19 +37,7 @@ app.use(cors({
   optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    statusCode: 429,
-    message: 'Too many requests from this IP, please try again later.'
-  }
-});
-app.use(limiter);
-
-// Instagram specific rate limit
+// Instagram specific rate limit - only for scraping operations
 const instagramLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20, // 20 requests per hour
@@ -113,7 +101,8 @@ app.use('/api/users', userRoutes);
 // Mount image proxy route
 app.use('/api', imageProxyRoutes);
 
-// Apply Instagram rate limit to refresh endpoint
+// Apply Instagram rate limit only to scraping endpoints
+app.use('/api/user/validate/:username', instagramLimiter);
 app.use('/api/user/:username/refresh', instagramLimiter);
 
 // API documentation

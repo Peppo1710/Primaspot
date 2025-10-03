@@ -46,6 +46,27 @@ const Dashboard = () => {
   // Helper function to get analytics for a specific post/reel
   const getAnalyticsForContent = (contentId, contentType) => {
     const analyticsData = contentType === 'posts' ? postAnalytics : reelAnalytics;
+    
+    // Check if analyticsData exists and is valid
+    if (!analyticsData) {
+      return null;
+    }
+    
+    // Check if analyticsData is an array and has data
+    if (!Array.isArray(analyticsData)) {
+      // If analyticsData is an object with analytics array, use that
+      if (analyticsData.analytics && Array.isArray(analyticsData.analytics)) {
+        return analyticsData.analytics.find(analytics => analytics.post_id === contentId || analytics.reel_id === contentId);
+      }
+      
+      return null;
+    }
+    
+    if (analyticsData.length === 0) {
+      return null;
+    }
+    
+    // If analyticsData is directly an array
     return analyticsData.find(analytics => analytics.post_id === contentId || analytics.reel_id === contentId);
   };
 
@@ -92,8 +113,16 @@ const Dashboard = () => {
         
         if (analyticsRes.success) setAnalytics(analyticsRes.data);
         if (engagementRes.success) setEngagement(engagementRes.data);
-        if (postAnalyticsRes.success) setPostAnalytics(postAnalyticsRes.data);
-        if (reelAnalyticsRes.success) setReelAnalytics(reelAnalyticsRes.data);
+        
+        // Handle post analytics data
+        if (postAnalyticsRes.success && postAnalyticsRes.data) {
+          setPostAnalytics(postAnalyticsRes.data);
+        }
+        
+        // Handle reel analytics data  
+        if (reelAnalyticsRes.success && reelAnalyticsRes.data) {
+          setReelAnalytics(reelAnalyticsRes.data);
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -283,47 +312,38 @@ const Dashboard = () => {
                 posts.map((post, i) => {
                   const analytics = getAnalyticsForContent(post.post_id, 'posts');
                   return (
-                    <div key={post.post_id || i} className="content-card enhanced-card">
-                      <div className="card-layout">
-                        <div className="card-media">
+                    <div key={post.post_id || i} className="modern-card">
+                      <div className="card-header">
+                        <div className="card-image">
                           {post.image_url ? (
-                            <>
-                              <img 
-                                src={post.image_url} 
-                                alt="Post"
-                                onError={(e) => {
-                                  console.error('Failed to load post image:', post.image_url);
-                                  e.target.style.display = 'none';
-                                  e.target.nextElementSibling.style.display = 'flex';
-                                }}
-                              />
-                              <div className="media-placeholder" style={{ display: 'none' }}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                  <rect width="18" height="18" x="3" y="3" rx="2"/>
-                                  <circle cx="9" cy="9" r="2"/>
-                                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
-                                </svg>
-                              </div>
-                            </>
+                            <img 
+                              src={post.image_url} 
+                              alt="Post"
+                              onError={(e) => {
+                                console.error('Failed to load post image:', post.image_url);
+                                e.target.style.display = 'none';
+                                e.target.nextElementSibling.style.display = 'flex';
+                              }}
+                            />
                           ) : (
-                            <div className="media-placeholder">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <div className="image-placeholder">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <rect width="18" height="18" x="3" y="3" rx="2"/>
                                 <circle cx="9" cy="9" r="2"/>
                                 <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
                               </svg>
                             </div>
                           )}
-                          <div className="media-overlay">
-                            <div className="engagement-stats">
-                              <span className="stat">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <div className="image-overlay">
+                            <div className="engagement-badge">
+                              <span className="likes">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
                                 </svg>
                                 {post.likes_count?.toLocaleString() || 0}
                               </span>
-                              <span className="stat">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <span className="comments">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                                 </svg>
                                 {post.comments_count || 0}
@@ -331,24 +351,30 @@ const Dashboard = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="card-content">
-                          <p className="content-caption">
-                            {post.caption ? post.caption.substring(0, 80) + '...' : 'No caption'}
+                      </div>
+                      
+                      <div className="card-body">
+                        <div className="bio-section">
+                          <h4 className="bio-title">Caption</h4>
+                          <p className="bio-text">
+                            {post.caption ? post.caption.substring(0, 150) + '...' : 'No caption available'}
                           </p>
-                          
-                          {analytics && (
-                            <div className="ml-analysis">
-                              <div className="analysis-header">
-                                <h4>AI Analysis</h4>
-                                <div className="quality-score">
-                                  Quality: {Math.round(analytics.quality_score || 0)}/10
-                                </div>
+                        </div>
+
+                        {analytics && (
+                          <div className="ml-analysis">
+                            <div className="analysis-header">
+                              <h4>AI Analysis</h4>
+                              <div className="quality-score">
+                                {Math.round(analytics.quality_score || 0)}/10
                               </div>
-                              
+                            </div>
+                            
+                            <div className="analysis-grid">
                               {analytics.keywords && analytics.keywords.length > 0 && (
-                                <div className="analysis-section">
+                                <div className="analysis-item">
                                   <h5>Tags</h5>
-                                  <div className="tags-list">
+                                  <div className="tags-container">
                                     {analytics.keywords.slice(0, 6).map((tag, idx) => (
                                       <span key={idx} className="tag">{tag}</span>
                                     ))}
@@ -357,21 +383,36 @@ const Dashboard = () => {
                               )}
                               
                               {analytics.vibe_classification && (
-                                <div className="analysis-section">
-                                  <h5>Vibe</h5>
-                                  <span className="vibe-badge">{analytics.vibe_classification}</span>
+                                <div className="analysis-item">
+                                  <h5>Ambience</h5>
+                                  <div className="vibe-container">
+                                    {analytics.vibe_classification.split(',').map((vibe, idx) => (
+                                      <span key={idx} className="vibe-tag">{vibe.trim()}</span>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
                               
-                              {analytics.num_people !== undefined && (
-                                <div className="analysis-section">
-                                  <h5>People</h5>
-                                  <span className="people-count">{analytics.num_people} person{analytics.num_people !== 1 ? 's' : ''}</span>
+                              <div className="analysis-item">
+                                <h5>Quality</h5>
+                                <div className="metrics">
+                                  <div className="metric">
+                                    <span className="metric-label">Score</span>
+                                    <div className="metric-bar">
+                                      <div className="metric-fill" style={{width: `${(analytics.quality_score || 0) * 10}%`}}></div>
+                                    </div>
+                                  </div>
+                                  <div className="metric">
+                                    <span className="metric-label">Lighting</span>
+                                    <div className="metric-bar">
+                                      <div className="metric-fill lighting" style={{width: `${(analytics.lighting_score || 0) * 10}%`}}></div>
+                                    </div>
+                                  </div>
                                 </div>
-                              )}
+                              </div>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -384,44 +425,37 @@ const Dashboard = () => {
                 reels.map((reel, i) => {
                   const analytics = getAnalyticsForContent(reel.reel_id, 'reels');
                   return (
-                    <div key={reel.reel_id || i} className="content-card enhanced-card">
-                      <div className="card-layout">
-                        <div className="card-media">
+                    <div key={reel.reel_id || i} className="modern-card">
+                      <div className="card-header">
+                        <div className="card-image">
                           {reel.thumbnail_url ? (
-                            <>
-                              <img 
-                                src={reel.thumbnail_url} 
-                                alt="Reel"
-                                onError={(e) => {
-                                  console.error('Failed to load reel thumbnail:', reel.thumbnail_url);
-                                  e.target.style.display = 'none';
-                                  e.target.nextElementSibling.style.display = 'flex';
-                                }}
-                              />
-                              <div className="media-placeholder" style={{ display: 'none' }}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                  <polygon points="5 3 19 12 5 21 5 3"/>
-                                </svg>
-                              </div>
-                            </>
+                            <img 
+                              src={reel.thumbnail_url} 
+                              alt="Reel"
+                              onError={(e) => {
+                                console.error('Failed to load reel thumbnail:', reel.thumbnail_url);
+                                e.target.style.display = 'none';
+                                e.target.nextElementSibling.style.display = 'flex';
+                              }}
+                            />
                           ) : (
-                            <div className="media-placeholder">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <div className="image-placeholder">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <polygon points="5 3 19 12 5 21 5 3"/>
                               </svg>
                             </div>
                           )}
-                          <div className="media-overlay">
-                            <div className="engagement-stats">
-                              <span className="stat">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <div className="image-overlay">
+                            <div className="engagement-badge">
+                              <span className="views">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
                                   <circle cx="12" cy="12" r="3"/>
                                 </svg>
                                 {reel.views_count?.toLocaleString() || 0}
                               </span>
-                              <span className="stat">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <span className="likes">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
                                 </svg>
                                 {reel.likes_count?.toLocaleString() || 0}
@@ -429,24 +463,30 @@ const Dashboard = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="card-content">
-                          <p className="content-caption">
-                            {reel.caption ? reel.caption.substring(0, 80) + '...' : 'No caption'}
+                      </div>
+                      
+                      <div className="card-body">
+                        <div className="bio-section">
+                          <h4 className="bio-title">Caption</h4>
+                          <p className="bio-text">
+                            {reel.caption ? reel.caption.substring(0, 150) + '...' : 'No caption available'}
                           </p>
-                          
-                          {analytics && (
-                            <div className="ml-analysis">
-                              <div className="analysis-header">
-                                <h4>AI Analysis</h4>
-                                <div className="quality-score">
-                                  Quality: {Math.round(analytics.quality_score || 0)}/10
-                                </div>
+                        </div>
+
+                        {analytics && (
+                          <div className="ml-analysis">
+                            <div className="analysis-header">
+                              <h4>AI Analysis</h4>
+                              <div className="quality-score">
+                                {Math.round(analytics.quality_score || 0)}/10
                               </div>
-                              
+                            </div>
+                            
+                            <div className="analysis-grid">
                               {analytics.descriptive_tags && analytics.descriptive_tags.length > 0 && (
-                                <div className="analysis-section">
+                                <div className="analysis-item">
                                   <h5>Tags</h5>
-                                  <div className="tags-list">
+                                  <div className="tags-container">
                                     {analytics.descriptive_tags.slice(0, 6).map((tag, idx) => (
                                       <span key={idx} className="tag">{tag}</span>
                                     ))}
@@ -455,21 +495,36 @@ const Dashboard = () => {
                               )}
                               
                               {analytics.vibe_classification && (
-                                <div className="analysis-section">
-                                  <h5>Vibe</h5>
-                                  <span className="vibe-badge">{analytics.vibe_classification}</span>
+                                <div className="analysis-item">
+                                  <h5>Ambience</h5>
+                                  <div className="vibe-container">
+                                    {analytics.vibe_classification.split(',').map((vibe, idx) => (
+                                      <span key={idx} className="vibe-tag">{vibe.trim()}</span>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
                               
-                              {analytics.num_people !== undefined && (
-                                <div className="analysis-section">
-                                  <h5>People</h5>
-                                  <span className="people-count">{analytics.num_people} person{analytics.num_people !== 1 ? 's' : ''}</span>
+                              <div className="analysis-item">
+                                <h5>Quality</h5>
+                                <div className="metrics">
+                                  <div className="metric">
+                                    <span className="metric-label">Score</span>
+                                    <div className="metric-bar">
+                                      <div className="metric-fill" style={{width: `${(analytics.quality_score || 0) * 10}%`}}></div>
+                                    </div>
+                                  </div>
+                                  <div className="metric">
+                                    <span className="metric-label">Lighting</span>
+                                    <div className="metric-bar">
+                                      <div className="metric-fill lighting" style={{width: `${(analytics.lighting_score || 0) * 10}%`}}></div>
+                                    </div>
+                                  </div>
                                 </div>
-                              )}
+                              </div>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

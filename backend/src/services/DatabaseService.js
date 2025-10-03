@@ -432,15 +432,20 @@ class DatabaseService {
 
   async getReelAnalytics(userId) {
     try {
-      const analyticsDoc = await db.ReelAiAnalysis
-        .findOne({ profile_id: userId })
-        .lean();
-      
-      if (!analyticsDoc || !analyticsDoc.analytics) {
+      // Get all reels for this user first
+      const userReels = await db.Reels.findOne({ profile_id: userId });
+      if (!userReels || !userReels.reels) {
         return [];
       }
       
-      return analyticsDoc.analytics;
+      const reelIds = userReels.reels.map(reel => reel.reel_id);
+      
+      // Get analytics for all reels
+      const analyticsDocs = await db.ReelAiAnalysis
+        .find({ reel_id: { $in: reelIds } })
+        .lean();
+      
+      return analyticsDocs;
     } catch (error) {
       this.logger.error('Error in getReelAnalytics:', error);
       throw new ApiError(500, 'Database error while retrieving reel analytics');
@@ -533,36 +538,41 @@ class DatabaseService {
             quality_score: analysis.quality?.blur_score ? (analysis.quality.blur_score * 10) : 0,
             events_objects: analysis.tags || [],
             descriptive_tags: analysis.tags || [],
-            caption: analysis.caption || '',
+            // Add the missing fields that the frontend expects
+            keywords: analysis.tags || [],
             num_people: analysis.num_people || 0,
-            ambience: analysis.ambience || [],
-            image_dimensions: {
-              width: analysis.quality?.width || 0,
-              height: analysis.quality?.height || 0
-            }
+            lighting_score: analysis.quality?.brightness ? Math.min(10, Math.max(1, analysis.quality.brightness / 25)) : 5
           });
         }
       }
 
-      // Find or create user's reel analytics document
-      const filter = { profile_id: userId };
-      const update = {
-        username: username.toLowerCase(),
-        profile_id: userId,
-        analytics: analyticsArray,
-        total_analyzed: analyticsArray.length,
-        analyzed_at: new Date(),
-        updatedAt: new Date()
-      };
+      // Save each reel analytics individually (since ReelAiAnalysis is per-reel, not per-user)
+      const savedAnalytics = [];
+      for (const analytics of analyticsArray) {
+        try {
+          // Create a clean analytics object with only valid schema fields
+          const cleanAnalytics = {
+            reel_id: analytics.reel_id,
+            content_categories: analytics.content_categories || [],
+            vibe_classification: analytics.vibe_classification || '',
+            quality_score: analytics.quality_score || 0,
+            events_objects: analytics.events_objects || [],
+            descriptive_tags: analytics.descriptive_tags || []
+          };
+          
+          const savedDoc = await db.ReelAiAnalysis.findOneAndUpdate(
+            { reel_id: analytics.reel_id },
+            cleanAnalytics,
+            { upsert: true, new: true }
+          ).lean();
+          savedAnalytics.push(savedDoc);
+        } catch (error) {
+          this.logger.error(`Error saving reel analytics for ${analytics.reel_id}:`, error);
+        }
+      }
 
-      const userAnalyticsDoc = await db.ReelAiAnalysis.findOneAndUpdate(
-        filter,
-        update,
-        { upsert: true, new: true }
-      ).lean();
-
-      this.logger.info(`Saved analytics for ${analyticsArray.length} reels`);
-      return userAnalyticsDoc;
+      this.logger.info(`Saved analytics for ${savedAnalytics.length} reels`);
+      return savedAnalytics;
     } catch (error) {
       this.logger.error('Error in saveReelAnalytics:', error);
       throw new ApiError(500, 'Database error while saving reel analytics');
