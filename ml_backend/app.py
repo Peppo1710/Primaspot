@@ -404,7 +404,7 @@ def analyze_video_url(video_url: str, sampling_seconds: int = FRAME_SAMPLING_SEC
 app = Flask(__name__)
 
 
-@app.route("/health", methods=["GET"])
+@app.route("/", methods=["GET"])
 def health():
     """Comprehensive health check endpoint"""
     import psutil
