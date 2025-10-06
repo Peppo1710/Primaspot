@@ -291,13 +291,47 @@ class UserController {
       }
 
       const skip = (parseInt(page) - 1) * parseInt(limit);
-      const reels = await this.databaseService.getUserReels(user._id, {
+      let reels = await this.databaseService.getUserReels(user._id, {
         limit: parseInt(limit),
         skip,
         sortBy
       });
 
-      const totalReels = reels.length; // You might want to add reels_count to profile
+      // If no reels found in database, fetch from Instagram
+      if (reels.length === 0) {
+        logger.info(`No reels found in database for @${username}, fetching from Instagram`);
+        
+        try {
+          // Fetch complete user data from Instagram
+          const instagramData = await this.instagramService.getCompleteUserData(username, 0);
+          
+          // Save reels to database
+          if (instagramData.reels && instagramData.reels.length > 0) {
+            const savedReels = await this.databaseService.saveReels(user._id, instagramData.reels, username);
+            logger.info(`Saved ${instagramData.reels.length} reels to database for @${username}`);
+            
+            // Also save reels to analytics collection (like posts)
+            try {
+              await this.databaseService.saveReelAnalytics(instagramData.reels, [], user._id, username);
+              logger.info(`Saved ${instagramData.reels.length} reels to analytics collection for @${username}`);
+            } catch (analyticsError) {
+              logger.error(`Error saving reels to analytics:`, analyticsError);
+            }
+            
+            // Fetch reels again from database
+            reels = await this.databaseService.getUserReels(user._id, {
+              limit: parseInt(limit),
+              skip,
+              sortBy
+            });
+          }
+        } catch (instagramError) {
+          logger.error(`Error fetching reels from Instagram for @${username}:`, instagramError);
+          // Continue with empty reels array if Instagram fetch fails
+        }
+      }
+
+      const totalReels = reels.length;
 
       return res.status(200).json({
         success: true,

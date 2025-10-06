@@ -4,11 +4,7 @@ import './Dashboard.css';
 import { getGlobalUsername } from '../store/globalStore';
 import { api } from '../services/api';
 import imageCache from '../services/imageCache';
-import { 
-  engagementData, 
-  contentAnalysisData, 
-  performanceData 
-} from '../data/dummy';
+
 import {
   LineChart,
   Line,
@@ -42,6 +38,14 @@ const Dashboard = () => {
   const [postAnalytics, setPostAnalytics] = useState([]);
   const [reelAnalytics, setReelAnalytics] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // NEW ANALYTICS STATES
+  const [engagementRates, setEngagementRates] = useState(null);
+  const [contentAnalysis, setContentAnalysis] = useState(null);
+  const [vibeAnalysis, setVibeAnalysis] = useState(null);
+  const [performanceData, setPerformanceData] = useState(null);
+  const [likesVsComments, setLikesVsComments] = useState(null);
+  const [qualityIndicators, setQualityIndicators] = useState(null);
 
   // Helper function to get analytics for a specific post/reel
   const getAnalyticsForContent = (contentId, contentType) => {
@@ -83,14 +87,38 @@ const Dashboard = () => {
       setLoading(true);
       
       try {
-        const [profileRes, postsRes, reelsRes, analyticsRes, engagementRes, postAnalyticsRes, reelAnalyticsRes] = await Promise.all([
+        const [
+          profileRes, 
+          postsRes, 
+          reelsRes, 
+          analyticsRes, 
+          engagementRes, 
+          postAnalyticsRes, 
+          reelAnalyticsRes,
+          // NEW ANALYTICS API CALLS
+          engagementRatesRes,
+          contentAnalysisRes,
+          vibeAnalysisRes,
+          performanceDataRes,
+          likesVsCommentsRes,
+          qualityIndicatorsRes
+        ] = await Promise.all([
           api.getUserProfile(user),
           api.getUserPosts(user, 1, 50),
           api.getUserReels(user, 1, 50),
           api.getPostAnalytics(user).catch(() => ({ success: false })),
           api.getEngagementMetrics(user),
           api.getPostAnalytics(user).catch(() => ({ success: false })),
-          api.getReelAnalytics(user).catch(() => ({ success: false }))
+          api.getReelAnalytics(user).catch(() => ({ success: false })),
+          // NEW ANALYTICS API CALLS
+          api.getEngagementRates(user).catch(() => ({ success: false })),
+
+          
+          api.getContentAnalysis(user).catch(() => ({ success: false })),
+          api.getVibeAnalysis(user).catch(() => ({ success: false })),
+          api.getPerformancePQVsEngagement(user).catch(() => ({ success: false })),
+          api.getLikesVsComments(user).catch(() => ({ success: false })),
+          api.getQualityIndicators(user).catch(() => ({ success: false }))
         ]);
         
         // Cache images locally in browser (no backend involved)
@@ -123,8 +151,64 @@ const Dashboard = () => {
         if (reelAnalyticsRes.success && reelAnalyticsRes.data) {
           setReelAnalytics(reelAnalyticsRes.data);
         }
+
+        // Handle NEW ANALYTICS DATA
+        if (engagementRatesRes.success && engagementRatesRes.data) {
+          setEngagementRates(engagementRatesRes.data);
+        }
         
-        // Debug logging
+        if (contentAnalysisRes.success && contentAnalysisRes.data) {
+          // Content analysis returns {analysis: "stringified JSON"} structure
+          try {
+            const parsedAnalysis = JSON.parse(contentAnalysisRes.data.analysis);
+            // Filter out miscellaneous entries
+            if (parsedAnalysis.tags) {
+              parsedAnalysis.tags = parsedAnalysis.tags.filter(tag => 
+                tag.tag && tag.tag.toLowerCase() !== 'miscellaneous'
+              );
+            }
+            setContentAnalysis(parsedAnalysis);
+          } catch (error) {
+            console.error('Error parsing content analysis:', error);
+            setContentAnalysis(contentAnalysisRes.data);
+          }
+        }
+        
+        if (vibeAnalysisRes.success && vibeAnalysisRes.data) {
+          // Vibe analysis returns {analysis: "stringified JSON"} structure
+          try {
+            const parsedAnalysis = JSON.parse(vibeAnalysisRes.data.analysis);
+            // Filter out miscellaneous and empty entries
+            if (parsedAnalysis.vibes) {
+              parsedAnalysis.vibes = parsedAnalysis.vibes.filter(vibe => 
+                vibe.vibe && 
+                vibe.vibe.toLowerCase() !== 'miscellaneous' && 
+                vibe.vibe.toLowerCase() !== 'empty' &&
+                vibe.percentage > 0
+              );
+            }
+            setVibeAnalysis(parsedAnalysis);
+          } catch (error) {
+            console.error('Error parsing vibe analysis:', error);
+            setVibeAnalysis(vibeAnalysisRes.data);
+          }
+        }
+        
+        if (performanceDataRes.success && performanceDataRes.data) {
+          setPerformanceData(performanceDataRes.data);
+        }
+        
+        if (likesVsCommentsRes.success && likesVsCommentsRes.data) {
+          setLikesVsComments(likesVsCommentsRes.data);
+        }
+        
+        if (qualityIndicatorsRes.success && qualityIndicatorsRes.data) {
+          setQualityIndicators(qualityIndicatorsRes.data);
+        }
+
+        // Debug logging for engagement performance only
+        console.log('=== ENGAGEMENT PERFORMANCE DEBUG ===');
+        console.log('Engagement Rates Response:', engagementRatesRes);
         console.log('Posts data:', postsRes);
         console.log('Reels data:', reelsRes);
         console.log('Posts count:', postsRes.success ? postsRes.data.length : 0);
@@ -259,7 +343,20 @@ const Dashboard = () => {
                 </svg>
               </div>
               <div className="kpi-content">
-                <span className="kpi-value">{engagement?.engagement_rate || '0'}%</span>
+                <span className="kpi-value">
+                  {engagementRates ? (
+                    (() => {
+                      const allEngagementRates = [
+                        ...(engagementRates.posts || []).map(p => p.engagement_rate),
+                        ...(engagementRates.reels || []).map(r => r.engagement_rate)
+                      ];
+                      const avgEngagementRate = allEngagementRates.length > 0 
+                        ? (allEngagementRates.reduce((sum, rate) => sum + rate, 0) / allEngagementRates.length)
+                        : 0;
+                      return avgEngagementRate.toFixed(2);
+                    })()
+                  ) : engagement?.engagement_rate || '0'}%
+                </span>
                 <span className="kpi-label">Engagement</span>
               </div>
             </div>
@@ -401,53 +498,69 @@ const Dashboard = () => {
                         </div>
                         
                         {/* Quality Section */}
-                        <div className="analysis-section">
+                        <div className="analysis-section compact">
                           <h5 className="section-label">Quality</h5>
-                          <div className="quality-display">
+                          <div className="quality-display compact">
                             {analytics ? (
                               <>
-                                <div className="quality-item">
-                                  <div className="quality-bar">
-                                    <div className="quality-fill" style={{width: `${(analytics.quality_score || 0) * 10}%`}}></div>
+                                <div className="quality-item compact">
+                                  <span className="quality-label-small">Quality</span>
+                                  <div className="quality-bar compact">
+                                    <div className="quality-fill" style={{width: `${Math.min(Math.min(Math.round((analytics.quality_score || 0) * 10), 100), 100)}%`}}></div>
                                   </div>
+                                  <span className="quality-value-small">{Math.min(Math.round((analytics.quality_score || 0) * 10), 100)}%</span>
                                 </div>
-                                <div className="quality-item">
-                                  <div className="quality-bar">
-                                    <div className="quality-fill" style={{width: `${(analytics.lighting_score || 0) * 10}%`}}></div>
+                                <div className="quality-item compact">
+                                  <span className="quality-label-small">Lighting</span>
+                                  <div className="quality-bar compact">
+                                    <div className="quality-fill" style={{width: `${Math.min(Math.min(Math.round((analytics.lighting_score || 0) * 10), 100), 100)}%`}}></div>
                                   </div>
+                                  <span className="quality-value-small">{Math.min(Math.round((analytics.lighting_score || 0) * 10), 100)}%</span>
                                 </div>
-                                <div className="quality-item">
-                                  <div className="quality-bar">
-                                    <div className="quality-fill" style={{width: `${(analytics.visual_appeal_score || 0) * 10}%`}}></div>
+                                <div className="quality-item compact">
+                                  <span className="quality-label-small">Visual</span>
+                                  <div className="quality-bar compact">
+                                    <div className="quality-fill" style={{width: `${Math.min(Math.min(Math.round((analytics.visual_appeal_score || 0) * 10), 100), 100)}%`}}></div>
                                   </div>
+                                  <span className="quality-value-small">{Math.min(Math.round((analytics.visual_appeal_score || 0) * 10), 100)}%</span>
                                 </div>
-                                <div className="quality-item">
-                                  <div className="quality-bar">
-                                    <div className="quality-fill" style={{width: `${(analytics.consistency_score || 0) * 10}%`}}></div>
+                                <div className="quality-item compact">
+                                  <span className="quality-label-small">Consistency</span>
+                                  <div className="quality-bar compact">
+                                    <div className="quality-fill" style={{width: `${Math.min(Math.min(Math.round((analytics.consistency_score || 0) * 10), 100), 100)}%`}}></div>
                                   </div>
+                                  <span className="quality-value-small">{Math.min(Math.round((analytics.consistency_score || 0) * 10), 100)}%</span>
                                 </div>
                               </>
                             ) : (
                               <>
-                                <div className="quality-item placeholder">
-                                  <div className="quality-bar">
+                                <div className="quality-item compact placeholder">
+                                  <span className="quality-label-small">Quality</span>
+                                  <div className="quality-bar compact">
                                     <div className="quality-fill" style={{width: '75%'}}></div>
                                   </div>
+                                  <span className="quality-value-small">75%</span>
                                 </div>
-                                <div className="quality-item placeholder">
-                                  <div className="quality-bar">
+                                <div className="quality-item compact placeholder">
+                                  <span className="quality-label-small">Lighting</span>
+                                  <div className="quality-bar compact">
                                     <div className="quality-fill" style={{width: '60%'}}></div>
                                   </div>
+                                  <span className="quality-value-small">60%</span>
                                 </div>
-                                <div className="quality-item placeholder">
-                                  <div className="quality-bar">
+                                <div className="quality-item compact placeholder">
+                                  <span className="quality-label-small">Visual</span>
+                                  <div className="quality-bar compact">
                                     <div className="quality-fill" style={{width: '80%'}}></div>
                                   </div>
+                                  <span className="quality-value-small">80%</span>
                                 </div>
-                                <div className="quality-item placeholder">
-                                  <div className="quality-bar">
+                                <div className="quality-item compact placeholder">
+                                  <span className="quality-label-small">Consistency</span>
+                                  <div className="quality-bar compact">
                                     <div className="quality-fill" style={{width: '45%'}}></div>
                                   </div>
+                                  <span className="quality-value-small">45%</span>
                                 </div>
                               </>
                             )}
@@ -549,53 +662,69 @@ const Dashboard = () => {
                         </div>
                         
                         {/* Quality Section */}
-                        <div className="analysis-section">
+                        <div className="analysis-section compact">
                           <h5 className="section-label">Quality</h5>
-                          <div className="quality-display">
+                          <div className="quality-display compact">
                             {analytics ? (
                               <>
-                                <div className="quality-item">
-                                  <div className="quality-bar">
-                                    <div className="quality-fill" style={{width: `${(analytics.quality_score || 0) * 10}%`}}></div>
+                                <div className="quality-item compact">
+                                  <span className="quality-label-small">Quality</span>
+                                  <div className="quality-bar compact">
+                                    <div className="quality-fill" style={{width: `${Math.min(Math.min(Math.round((analytics.quality_score || 0) * 10), 100), 100)}%`}}></div>
                                   </div>
+                                  <span className="quality-value-small">{Math.min(Math.round((analytics.quality_score || 0) * 10), 100)}%</span>
                                 </div>
-                                <div className="quality-item">
-                                  <div className="quality-bar">
-                                    <div className="quality-fill" style={{width: `${(analytics.lighting_score || 0) * 10}%`}}></div>
+                                <div className="quality-item compact">
+                                  <span className="quality-label-small">Lighting</span>
+                                  <div className="quality-bar compact">
+                                    <div className="quality-fill" style={{width: `${Math.min(Math.min(Math.round((analytics.lighting_score || 0) * 10), 100), 100)}%`}}></div>
                                   </div>
+                                  <span className="quality-value-small">{Math.min(Math.round((analytics.lighting_score || 0) * 10), 100)}%</span>
                                 </div>
-                                <div className="quality-item">
-                                  <div className="quality-bar">
-                                    <div className="quality-fill" style={{width: `${(analytics.visual_appeal_score || 0) * 10}%`}}></div>
+                                <div className="quality-item compact">
+                                  <span className="quality-label-small">Visual</span>
+                                  <div className="quality-bar compact">
+                                    <div className="quality-fill" style={{width: `${Math.min(Math.min(Math.round((analytics.visual_appeal_score || 0) * 10), 100), 100)}%`}}></div>
                                   </div>
+                                  <span className="quality-value-small">{Math.min(Math.round((analytics.visual_appeal_score || 0) * 10), 100)}%</span>
                                 </div>
-                                <div className="quality-item">
-                                  <div className="quality-bar">
-                                    <div className="quality-fill" style={{width: `${(analytics.consistency_score || 0) * 10}%`}}></div>
+                                <div className="quality-item compact">
+                                  <span className="quality-label-small">Consistency</span>
+                                  <div className="quality-bar compact">
+                                    <div className="quality-fill" style={{width: `${Math.min(Math.min(Math.round((analytics.consistency_score || 0) * 10), 100), 100)}%`}}></div>
                                   </div>
+                                  <span className="quality-value-small">{Math.min(Math.round((analytics.consistency_score || 0) * 10), 100)}%</span>
                                 </div>
                               </>
                             ) : (
                               <>
-                                <div className="quality-item placeholder">
-                                  <div className="quality-bar">
+                                <div className="quality-item compact placeholder">
+                                  <span className="quality-label-small">Quality</span>
+                                  <div className="quality-bar compact">
                                     <div className="quality-fill" style={{width: '75%'}}></div>
                                   </div>
+                                  <span className="quality-value-small">75%</span>
                                 </div>
-                                <div className="quality-item placeholder">
-                                  <div className="quality-bar">
+                                <div className="quality-item compact placeholder">
+                                  <span className="quality-label-small">Lighting</span>
+                                  <div className="quality-bar compact">
                                     <div className="quality-fill" style={{width: '60%'}}></div>
                                   </div>
+                                  <span className="quality-value-small">60%</span>
                                 </div>
-                                <div className="quality-item placeholder">
-                                  <div className="quality-bar">
+                                <div className="quality-item compact placeholder">
+                                  <span className="quality-label-small">Visual</span>
+                                  <div className="quality-bar compact">
                                     <div className="quality-fill" style={{width: '80%'}}></div>
                                   </div>
+                                  <span className="quality-value-small">80%</span>
                                 </div>
-                                <div className="quality-item placeholder">
-                                  <div className="quality-bar">
+                                <div className="quality-item compact placeholder">
+                                  <span className="quality-label-small">Consistency</span>
+                                  <div className="quality-bar compact">
                                     <div className="quality-fill" style={{width: '45%'}}></div>
                                   </div>
+                                  <span className="quality-value-small">45%</span>
                                 </div>
                               </>
                             )}
@@ -644,36 +773,118 @@ const Dashboard = () => {
             {activeSection === 'engagement' && (
               <div className="analytics-content">
                 <div className="section-header">
-                  <h2>📊 Engagement Performance</h2>
-                  <p>Track your engagement metrics over time</p>
+                  <h2> Engagement Performance</h2>
+                  <p>Individual engagement rates for posts and reels</p>
                 </div>
                 <div className="chart-row">
                   <div className="chart-container">
-                    <h3>Engagement Over Time</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={engagementData.engagementOverTime}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
-                        <XAxis dataKey="post" stroke="#B0B0B0" />
-                        <YAxis stroke="#B0B0B0" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#1A1A1A', 
-                            border: '1px solid #121212', 
-                            borderRadius: '8px',
-                            color: '#F5F5F5'
-                          }} 
-                        />
-                        <Line type="monotone" dataKey="likes" stroke="#FF3CAC" strokeWidth={3} dot={{ fill: '#FF3CAC', strokeWidth: 2, r: 6 }} />
-                        <Line type="monotone" dataKey="comments" stroke="#00F5D4" strokeWidth={3} dot={{ fill: '#00F5D4', strokeWidth: 2, r: 6 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <h3>Individual Engagement Rates - Posts</h3>
+                    {engagementRates?.posts && engagementRates.posts.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={engagementRates.posts.slice(0, 10).map((post, index) => ({
+                          ...post,
+                          postLabel: `Post ${index + 1}`
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
+                          <XAxis 
+                            dataKey="postLabel" 
+                            stroke="#B0B0B0" 
+                            height={60}
+                            interval={0}
+                          />
+                          <YAxis 
+                            stroke="#B0B0B0"
+                            label={{ value: 'ER (%)', angle: -90, position: 'insideLeft' }}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#FFFFFF', 
+                              border: '1px solid #E0E0E0', 
+                              borderRadius: '8px',
+                              color: '#000000'
+                            }}
+                            formatter={(value, name, props) => {
+                              if (name === 'engagement_rate') {
+                                return [
+                                  <div>
+                                    <div><strong>Engagement Rate:</strong> {value}%</div>
+                                    <div><strong>Likes:</strong> {props.payload.likes_count}</div>
+                                    <div><strong>Comments:</strong> {props.payload.comments_count}</div>
+                                    <div><strong>Total Engagement:</strong> {props.payload.total_engagement}</div>
+                                  </div>
+                                ];
+                              }
+                              return [value, name];
+                            }}
+                            labelFormatter={(label) => label}
+                          />
+                          <Bar dataKey="engagement_rate" fill="#FF3CAC" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="no-data">
+                        {engagementRates ? 'No posts engagement data available' : 'Loading engagement data...'}
+                      </div>
+                    )}
                   </div>
                   <div className="chart-container">
+                    <h3>Individual Engagement Rates - Reels</h3>
+                    {engagementRates?.reels && engagementRates.reels.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={engagementRates.reels.slice(0, 10).map((reel, index) => ({
+                          ...reel,
+                          reelLabel: `Reel ${index + 1}`
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
+                          <XAxis 
+                            dataKey="reelLabel" 
+                            stroke="#B0B0B0" 
+                            height={60}
+                            interval={0}
+                          />
+                          <YAxis 
+                            stroke="#B0B0B0"
+                            label={{ value: 'ER (%)', angle: -90, position: 'insideLeft' }}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#FFFFFF', 
+                              border: '1px solid #E0E0E0', 
+                              borderRadius: '8px',
+                              color: '#000000'
+                            }}
+                            formatter={(value, name, props) => {
+                              if (name === 'engagement_rate') {
+                                return [
+                                  <div>
+                                    <div><strong>Engagement Rate:</strong> {value}%</div>
+                                    <div><strong>Likes:</strong> {props.payload.likes_count}</div>
+                                    <div><strong>Comments:</strong> {props.payload.comments_count}</div>
+                                    <div><strong>Total Engagement:</strong> {props.payload.total_engagement}</div>
+                                  </div>
+                                ];
+                              }
+                              return [value, name];
+                            }}
+                            labelFormatter={(label) => label}
+                          />
+                          <Bar dataKey="engagement_rate" fill="#00F5D4" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="no-data">
+                        {engagementRates ? 'No reels engagement data available' : 'Loading engagement data...'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="chart-row">
+                  <div className="chart-container full-width">
                     <h3>Likes vs Comments Breakdown</h3>
                     <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={engagementData.likesVsComments}>
+                      <BarChart data={likesVsComments?.posts_data?.slice(0, 10) || []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
-                        <XAxis dataKey="post" stroke="#B0B0B0" />
+                        <XAxis dataKey="date" stroke="#B0B0B0" />
                         <YAxis stroke="#B0B0B0" />
                         <Tooltip 
                           contentStyle={{ 
@@ -702,86 +913,107 @@ const Dashboard = () => {
                 <div className="chart-row">
                   <div className="chart-container">
                     <h3>Content Categories</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={contentAnalysisData.contentCategories}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({category, percentage}) => `${category} ${percentage}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="count"
-                        >
-                          {contentAnalysisData.contentCategories.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={['#9D4EDD', '#FF3CAC', '#00F5D4', '#FF8E3C'][index % 4]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#1A1A1A', 
-                            border: '1px solid #121212', 
-                            borderRadius: '8px',
-                            color: '#F5F5F5'
-                          }} 
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    {contentAnalysis?.tags && contentAnalysis.tags.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={contentAnalysis.tags}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({tag, percentage}) => `${tag} ${percentage}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="percentage"
+                          >
+                            {contentAnalysis.tags.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={['#9D4EDD', '#FF3CAC', '#00F5D4', '#FF8E3C', '#A7F432'][index % 5]} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#FFFFFF', 
+                              border: '1px solid #E0E0E0', 
+                              borderRadius: '8px',
+                              color: '#000000'
+                            }}
+                            formatter={(value, name) => [`${value}%`, 'Percentage']}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="no-data">
+                        {contentAnalysis ? 'No content tags found' : 'Loading content analysis...'}
+                      </div>
+                    )}
                   </div>
                   <div className="chart-container">
                     <h3>Post Vibe Distribution</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={contentAnalysisData.postVibeDistribution}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={40}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="count"
-                          label={({vibe, percentage}) => `${vibe} ${percentage}%`}
-                        >
-                          {contentAnalysisData.postVibeDistribution.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={['#A7F432', '#9D4EDD', '#FF3CAC', '#00F5D4'][index % 4]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#1A1A1A', 
-                            border: '1px solid #121212', 
-                            borderRadius: '8px',
-                            color: '#F5F5F5'
-                          }} 
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    {vibeAnalysis?.vibes && vibeAnalysis.vibes.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={vibeAnalysis.vibes}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={40}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="percentage"
+                            label={({vibe, percentage}) => `${vibe} ${percentage}%`}
+                          >
+                            {vibeAnalysis.vibes.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={['#A7F432', '#9D4EDD', '#FF3CAC', '#00F5D4', '#FF8E3C'][index % 5]} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#FFFFFF', 
+                              border: '1px solid #E0E0E0', 
+                              borderRadius: '8px',
+                              color: '#000000'
+                            }}
+                            formatter={(value, name) => [`${value}%`, 'Percentage']}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="no-data">
+                        {vibeAnalysis ? 'No vibe data found' : 'Loading vibe analysis...'}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="chart-row">
                   <div className="chart-container full-width">
                     <h3>Top Content Tags</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart 
-                        data={contentAnalysisData.topContentTags} 
-                        layout="vertical"
-                        margin={{ left: 80 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
-                        <XAxis type="number" stroke="#B0B0B0" />
-                        <YAxis dataKey="tag" type="category" stroke="#B0B0B0" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#1A1A1A', 
-                            border: '1px solid #121212', 
-                            borderRadius: '8px',
-                            color: '#F5F5F5'
-                          }} 
-                        />
-                        <Bar dataKey="count" fill="#FF3CAC" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {contentAnalysis?.tags && contentAnalysis.tags.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart 
+                          data={contentAnalysis.tags} 
+                          layout="vertical"
+                          margin={{ left: 80 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
+                          <XAxis type="number" stroke="#B0B0B0" domain={[0, 100]} />
+                          <YAxis dataKey="tag" type="category" stroke="#B0B0B0" />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#FFFFFF', 
+                              border: '1px solid #E0E0E0', 
+                              borderRadius: '8px',
+                              color: '#000000'
+                            }}
+                            formatter={(value, name) => [`${value}%`, 'Percentage']}
+                          />
+                          <Bar dataKey="percentage" fill="#FF3CAC" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="no-data">
+                        {contentAnalysis ? 'No content tags found for bar chart' : 'Loading content tags...'}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -792,51 +1024,100 @@ const Dashboard = () => {
               <div className="analytics-content">
                 <div className="section-header">
                   <h2>⚡ Performance Insights</h2>
-                  <p>Analyze the relationship between quality and engagement</p>
+                  <p>Quality scores vs engagement rates for posts and reels</p>
                 </div>
                 <div className="chart-row">
                   <div className="chart-container">
-                    <h3>Post Quality vs Engagement</h3>
+                    <h3>Posts: Quality Score vs Engagement Rate</h3>
                     <ResponsiveContainer width="100%" height={300}>
-                      <ScatterChart data={performanceData.qualityVsEngagement}>
+                      <ScatterChart data={performanceData?.posts || []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
-                        <XAxis type="number" dataKey="quality" name="Quality Score" stroke="#B0B0B0" domain={[0, 100]} />
-                        <YAxis type="number" dataKey="engagement" name="Total Engagement" stroke="#B0B0B0" />
+                        <XAxis type="number" dataKey="quality_score" name="Quality Score" stroke="#B0B0B0" domain={[0, 100]} />
+                        <YAxis type="number" dataKey="engagement_rate_percentage" name="Engagement Rate %" stroke="#B0B0B0" />
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#1A1A1A', 
                             border: '1px solid #121212', 
                             borderRadius: '8px',
                             color: '#F5F5F5'
-                          }} 
+                          }}
                           formatter={(value, name) => {
-                            if (name === 'quality') return [value, 'Quality Score'];
-                            if (name === 'engagement') return [value, 'Total Engagement'];
+                            if (name === 'quality_score') return [value, 'Quality Score'];
+                            if (name === 'engagement_rate_percentage') return [`${value}%`, 'Engagement Rate'];
                             return [value, name];
                           }}
                         />
-                        <Scatter dataKey="engagement" fill="#FF3CAC" />
+                        <Scatter dataKey="engagement_rate_percentage" fill="#FF3CAC" />
                       </ScatterChart>
                     </ResponsiveContainer>
                   </div>
                   <div className="chart-container">
+                    <h3>Reels: Quality Score vs Engagement Rate</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <ScatterChart data={performanceData?.reels || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#121212" />
+                        <XAxis type="number" dataKey="quality_score" name="Quality Score" stroke="#B0B0B0" domain={[0, 100]} />
+                        <YAxis type="number" dataKey="engagement_rate_percentage" name="Engagement Rate %" stroke="#B0B0B0" />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#1A1A1A', 
+                            border: '1px solid #121212', 
+                            borderRadius: '8px',
+                            color: '#F5F5F5'
+                          }}
+                          formatter={(value, name) => {
+                            if (name === 'quality_score') return [value, 'Quality Score'];
+                            if (name === 'engagement_rate_percentage') return [`${value}%`, 'Engagement Rate'];
+                            return [value, name];
+                          }}
+                        />
+                        <Scatter dataKey="engagement_rate_percentage" fill="#00F5D4" />
+                      </ScatterChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="chart-row">
+                  <div className="chart-container full-width">
                     <h3>Quality Indicators</h3>
                     <div className="quality-indicators">
-                      {performanceData.qualityIndicators.map((indicator, index) => (
-                        <div key={indicator.name} className="quality-item">
-                          <span className="quality-label">{indicator.name}</span>
-                          <div className="progress-bar">
-                            <div 
-                              className="progress-fill" 
-                              style={{
-                                width: `${indicator.value}%`,
-                                background: `linear-gradient(90deg, ${['#9D4EDD', '#FF3CAC', '#00F5D4'][index % 3]} 0%, ${['#FF3CAC', '#00F5D4', '#FF8E3C'][index % 3]} 100%)`
-                              }}
-                            ></div>
-                          </div>
-                          <span className="quality-value">{indicator.value}%</span>
-                        </div>
-                      ))}
+                      {qualityIndicators?.quality_indicators ? (
+                        Object.entries(qualityIndicators.quality_indicators).map(([key, value], index) => {
+                          // Normalize values to 0-100 scale
+                          let normalizedValue = value;
+                          if (typeof value === 'number') {
+                            // If value is already in 0-100 range, use as is
+                            // If value is in 0-10 range, multiply by 10
+                            // If value is in 0-1 range, multiply by 100
+                            if (value <= 1) {
+                              normalizedValue = value * 100;
+                            } else if (value <= 10) {
+                              normalizedValue = value * 10;
+                            } else if (value > 100) {
+                              normalizedValue = Math.min(value / 10, 100); // Cap at 100
+                            }
+                          }
+                          
+                          return (
+                            <div key={key} className="quality-item">
+                              <span className="quality-label">
+                                {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </span>
+                              <div className="progress-bar">
+                                <div 
+                                  className="progress-fill" 
+                                  style={{
+                                    width: `${Math.min(normalizedValue, 100)}%`,
+                                    background: `linear-gradient(90deg, ${['#9D4EDD', '#FF3CAC', '#00F5D4'][index % 3]} 0%, ${['#FF3CAC', '#00F5D4', '#FF8E3C'][index % 3]} 100%)`
+                                  }}
+                                ></div>
+                              </div>
+                              <span className="quality-value">{Math.round(normalizedValue)}%</span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="no-data">No quality indicators data available</div>
+                      )}
                     </div>
                   </div>
                 </div>

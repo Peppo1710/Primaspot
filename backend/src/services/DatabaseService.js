@@ -281,7 +281,7 @@ class DatabaseService {
     try {
       // Transform posts data to new format
       const postsArray = posts.map(postData => ({
-        post_id: postData.instagram_post_id,
+        post_id: postData.instagram_post_id || postData.shortcode || `post_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         post_url: postData.url || `https://instagram.com/p/${postData.shortcode}`,
         image_url: postData.display_url,
         video_url: postData.video_url,
@@ -326,7 +326,7 @@ class DatabaseService {
 
       // Transform reels data to new format
       const reelsArray = reels.map(reel => ({
-        reel_id: reel.instagram_post_id || reel.shortcode,
+        reel_id: reel.instagram_post_id || reel.shortcode || `reel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         reel_url: reel.url || `https://instagram.com/reel/${reel.shortcode}`,
         thumbnail_url: reel.thumbnail_url || reel.display_url,
         video_url: reel.video_url,
@@ -437,25 +437,18 @@ class DatabaseService {
     try {
       this.logger.info(`Getting reel analytics for user ID: ${userId}`);
 
-      // Get all reels for this user first
-      const userReels = await db.Reel.findOne({ profile_id: userId });
-      this.logger.info(`Found user reels document:`, userReels ? 'exists' : 'not found');
+      // Get user's analytics document (like PostAiAnalysis)
+      const userAnalyticsDoc = await db.ReelAiAnalysis
+        .findOne({ profile_id: userId })
+        .lean();
 
-      if (!userReels || !userReels.reels) {
-        this.logger.info('No reels found for user, returning empty array');
+      if (!userAnalyticsDoc || !userAnalyticsDoc.analytics) {
+        this.logger.info('No reel analytics found for user, returning empty array');
         return [];
       }
 
-      const reelIds = userReels.reels.map(reel => reel.reel_id);
-      this.logger.info(`Found ${reelIds.length} reel IDs:`, reelIds);
-
-      // Get analytics for all reels
-      const analyticsDocs = await db.ReelAiAnalysis
-        .find({ reel_id: { $in: reelIds } })
-        .lean();
-
-      this.logger.info(`Found ${analyticsDocs.length} analytics documents`);
-      return analyticsDocs;
+      this.logger.info(`Found ${userAnalyticsDoc.analytics.length} reel analytics`);
+      return userAnalyticsDoc.analytics;
     } catch (error) {
       this.logger.error('Error in getReelAnalytics:', error);
       this.logger.error('Error details:', {
@@ -561,33 +554,25 @@ class DatabaseService {
         }
       }
 
-      // Save each reel analytics individually (since ReelAiAnalysis is per-reel, not per-user)
-      const savedAnalytics = [];
-      for (const analytics of analyticsArray) {
-        try {
-          // Create a clean analytics object with only valid schema fields
-          const cleanAnalytics = {
-            reel_id: analytics.reel_id,
-            content_categories: analytics.content_categories || [],
-            vibe_classification: analytics.vibe_classification || '',
-            quality_score: analytics.quality_score || 0,
-            events_objects: analytics.events_objects || [],
-            descriptive_tags: analytics.descriptive_tags || []
-          };
+      // Find or create user's analytics document (like PostAiAnalysis)
+      const filter = { profile_id: userId };
+      const update = {
+        username: username.toLowerCase(),
+        profile_id: userId,
+        analytics: analyticsArray,
+        total_analyzed: analyticsArray.length,
+        analyzed_at: new Date(),
+        updatedAt: new Date()
+      };
 
-          const savedDoc = await db.ReelAiAnalysis.findOneAndUpdate(
-            { reel_id: analytics.reel_id },
-            cleanAnalytics,
-            { upsert: true, new: true }
-          ).lean();
-          savedAnalytics.push(savedDoc);
-        } catch (error) {
-          this.logger.error(`Error saving reel analytics for ${analytics.reel_id}:`, error);
-        }
-      }
+      const userAnalyticsDoc = await db.ReelAiAnalysis.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: true, new: true }
+      ).lean();
 
-      this.logger.info(`Saved analytics for ${savedAnalytics.length} reels`);
-      return savedAnalytics;
+      this.logger.info(`Saved analytics for ${analyticsArray.length} reels`);
+      return userAnalyticsDoc;
     } catch (error) {
       this.logger.error('Error in saveReelAnalytics:', error);
       throw new ApiError(500, 'Database error while saving reel analytics');
@@ -794,39 +779,51 @@ class DatabaseService {
 
       if (followersCount === 0) {
         return {
-          engagement_rate: 0,
+          posts: [],
+          reels: [],
           followers_count: 0,
           message: 'No followers data available'
         };
       }
 
-      // Calculate engagement for posts
-      const postsEngagement = posts.reduce((sum, post) => {
-        return sum + (post.likes_count || 0) + (post.comments_count || 0);
-      }, 0);
+      // Calculate individual engagement rates for posts
+      const postsWithER = posts.map(post => {
+        const likes = post.likes_count || 0;
+        const comments = post.comments_count || 0;
+        const engagement = likes + comments;
+        const engagementRate = followersCount > 0 ? ((engagement / followersCount) * 100) : 0;
 
-      // Calculate engagement for reels
-      const reelsEngagement = reels.reduce((sum, reel) => {
-        return sum + (reel.likes_count || 0) + (reel.comments_count || 0);
-      }, 0);
+        return {
+          post_id: post.post_id,
+          shortcode: post.shortcode,
+          likes_count: likes,
+          comments_count: comments,
+          total_engagement: engagement,
+          engagement_rate: Math.round(engagementRate * 100) / 100
+        };
+      });
 
-      const totalEngagement = postsEngagement + reelsEngagement;
-      const totalContent = posts.length + reels.length;
+      // Calculate individual engagement rates for reels
+      const reelsWithER = reels.map(reel => {
+        const likes = reel.likes_count || 0;
+        const comments = reel.comments_count || 0;
+        const engagement = likes + comments;
+        const engagementRate = followersCount > 0 ? ((engagement / followersCount) * 100) : 0;
 
-      // ER = (likes + comments) / 100
-      const engagementRate = totalEngagement / 100;
+        return {
+          reel_id: reel.reel_id,
+          shortcode: reel.shortcode,
+          likes_count: likes,
+          comments_count: comments,
+          total_engagement: engagement,
+          engagement_rate: Math.round(engagementRate * 100) / 100
+        };
+      });
 
       return {
-        engagement_rate: Math.round(engagementRate * 100) / 100,
-        followers_count: followersCount,
-        total_engagement: totalEngagement,
-        total_content: totalContent,
-        posts_engagement: postsEngagement,
-        reels_engagement: reelsEngagement,
-        posts_count: posts.length,
-        reels_count: reels.length,
-        engagement_per_content: totalContent > 0 ? Math.round(totalEngagement / totalContent) : 0,
-        engagement_rate_percentage: followersCount > 0 ? Math.round((totalEngagement / followersCount) * 10000) / 100 : 0
+        posts: postsWithER,
+        reels: reelsWithER,
+        followers_count: followersCount
       };
     } catch (error) {
       this.logger.error('Error in calculateEngagementRate:', error);
@@ -864,13 +861,14 @@ class DatabaseService {
         if (reel.descriptive_tags && Array.isArray(reel.descriptive_tags)) {
           allTags.push(...reel.descriptive_tags);
         }
+        if (reel.keywords && Array.isArray(reel.keywords)) {
+          allTags.push(...reel.keywords);
+        }
       });
 
       if (allTags.length === 0) {
         return {
-          message: 'No content analysis data available',
-          tags: [],
-          analysis: null
+          message: 'No content analysis data available'
         };
       }
 
@@ -898,14 +896,7 @@ Return format (strict JSON only):
 Output:`
       );
 
-      return {
-        total_tags: allTags.length,
-        unique_tags: [...new Set(allTags)].length,
-        all_tags: allTags,
-        grok_analysis: grokAnalysis,
-        posts_analyzed: postAnalytics.length,
-        reels_analyzed: reelAnalytics.length
-      };
+      return grokAnalysis;
     } catch (error) {
       this.logger.error('Error in calculateContentAnalysis:', error);
       throw new ApiError(500, 'Error calculating content analysis');
@@ -928,7 +919,11 @@ Output:`
 
       postAnalytics.forEach(post => {
         if (post.vibe_classification) {
-          allVibes.push(post.vibe_classification);
+          // Treat vibe_classification as array
+          const vibes = Array.isArray(post.vibe_classification) 
+            ? post.vibe_classification 
+            : post.vibe_classification.split(',').map(v => v.trim()).filter(v => v);
+          allVibes.push(...vibes);
         }
         if (post.ambience && Array.isArray(post.ambience)) {
           allVibes.push(...post.ambience);
@@ -937,31 +932,26 @@ Output:`
 
       reelAnalytics.forEach(reel => {
         if (reel.vibe_classification) {
-          allVibes.push(reel.vibe_classification);
+          // Treat vibe_classification as array
+          const vibes = Array.isArray(reel.vibe_classification) 
+            ? reel.vibe_classification 
+            : reel.vibe_classification.split(',').map(v => v.trim()).filter(v => v);
+          allVibes.push(...vibes);
         }
       });
 
       if (allVibes.length === 0) {
         return {
-          message: 'No vibe analysis data available',
-          vibes: [],
-          analysis: null
+          message: 'No vibe analysis data available'
         };
       }
 
       // Call Grok API for vibe analysis
       const grokAnalysis = await this.callGrokAPI(
-        `Analyze these vibe classifications and return ONLY a valid JSON object with the most common 8 vibes and their percentages. Format: {"vibes": [{"vibe": "name", "percentage": number}]}. Generalize similar vibes and put less important ones as "miscellaneous", do not even return things like what you did what were you thinking ,i just want purse json data. Vibes: ${allVibes.join(', ')}`
+        `Analyze these vibe classifications and return ONLY a valid JSON object with the most common 8 vibes and their percentages. Format: {"vibes": [{"vibe": "name", "percentage": number}]}. Generalize similar vibes and put less important ones as "miscellaneous", do not even return things like what you did what were you thinking ,i just want pure json data. Vibes: ${allVibes.join(', ')}`
       );
 
-      return {
-        total_vibes: allVibes.length,
-        unique_vibes: [...new Set(allVibes)].length,
-        all_vibes: allVibes,
-        grok_analysis: grokAnalysis,
-        posts_analyzed: postAnalytics.length,
-        reels_analyzed: reelAnalytics.length
-      };
+      return grokAnalysis;
     } catch (error) {
       this.logger.error('Error in calculateVibeAnalysis:', error);
       throw new ApiError(500, 'Error calculating vibe analysis');
@@ -997,6 +987,9 @@ Output:`
         }
         if (reel.descriptive_tags && Array.isArray(reel.descriptive_tags)) {
           allTags.push(...reel.descriptive_tags);
+        }
+        if (reel.keywords && Array.isArray(reel.keywords)) {
+          allTags.push(...reel.keywords);
         }
       });
 
@@ -1049,59 +1042,47 @@ Output:`
       const postAnalytics = await this.getPostAnalytics(user._id);
       const reelAnalytics = await this.getReelAnalytics(user._id);
 
-      // Normalize quality scores and calculate engagement rates
-      const processedData = [];
+      const followersCount = user.followers_count || 0;
 
       // Process posts
-      posts.forEach(post => {
+      const postsData = posts.map(post => {
         const analytics = postAnalytics.find(a => a.post_id === post.post_id);
-        if (analytics) {
-          const qualityScore = this.normalizeQualityScore(analytics.quality_score || 0);
-          const engagement = (post.likes_count || 0) + (post.comments_count || 0);
-          const er = engagement / 100;
+        const qualityScore = analytics ? this.normalizeQualityScore(analytics.quality_score || 0) : 0;
+        const likes = post.likes_count || 0;
+        const comments = post.comments_count || 0;
+        const engagement = likes + comments;
+        const engagementRate = followersCount > 0 ? ((engagement / followersCount) * 100) : 0;
 
-          processedData.push({
-            type: 'post',
-            id: post.post_id,
-            quality_score: qualityScore,
-            engagement: engagement,
-            engagement_rate: er,
-            likes: post.likes_count || 0,
-            comments: post.comments_count || 0
-          });
-        }
+        return {
+          type: 'post',
+          id: post.post_id,
+          shortcode: post.shortcode,
+          quality_score: qualityScore,
+          engagement_rate_percentage: Math.round(engagementRate * 100) / 100
+        };
       });
 
       // Process reels
-      reels.forEach(reel => {
+      const reelsData = reels.map(reel => {
         const analytics = reelAnalytics.find(a => a.reel_id === reel.reel_id);
-        if (analytics) {
-          const qualityScore = this.normalizeQualityScore(analytics.quality_score || 0);
-          const engagement = (reel.likes_count || 0) + (reel.comments_count || 0);
-          const er = engagement / 100;
+        const qualityScore = analytics ? this.normalizeQualityScore(analytics.quality_score || 0) : 0;
+        const likes = reel.likes_count || 0;
+        const comments = reel.comments_count || 0;
+        const engagement = likes + comments;
+        const engagementRate = followersCount > 0 ? ((engagement / followersCount) * 100) : 0;
 
-          processedData.push({
-            type: 'reel',
-            id: reel.reel_id,
-            quality_score: qualityScore,
-            engagement: engagement,
-            engagement_rate: er,
-            likes: reel.likes_count || 0,
-            comments: reel.comments_count || 0
-          });
-        }
+        return {
+          type: 'reel',
+          id: reel.reel_id,
+          shortcode: reel.shortcode,
+          quality_score: qualityScore,
+          engagement_rate_percentage: Math.round(engagementRate * 100) / 100
+        };
       });
 
       return {
-        total_analyzed: processedData.length,
-        posts_analyzed: processedData.filter(item => item.type === 'post').length,
-        reels_analyzed: processedData.filter(item => item.type === 'reel').length,
-        data: processedData,
-        summary: {
-          avg_quality_score: processedData.length > 0 ? Math.round(processedData.reduce((sum, item) => sum + item.quality_score, 0) / processedData.length) : 0,
-          avg_engagement_rate: processedData.length > 0 ? Math.round(processedData.reduce((sum, item) => sum + item.engagement_rate, 0) / processedData.length * 100) / 100 : 0,
-          avg_engagement: processedData.length > 0 ? Math.round(processedData.reduce((sum, item) => sum + item.engagement, 0) / processedData.length) : 0
-        }
+        posts: postsData,
+        reels: reelsData
       };
     } catch (error) {
       this.logger.error('Error in calculatePerformancePQVsEngagement:', error);

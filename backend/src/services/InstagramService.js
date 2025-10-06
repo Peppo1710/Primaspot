@@ -133,11 +133,11 @@ class InstagramService {
 
   /**
    * Fetch posts (transformed) and persist raw post rows.
-   * Returns { posts, rawPostRows }
+   * Returns { posts, rawPostRows } - ONLY regular posts, excludes reels
    */
   async getUserPosts(username, limit = 12) {
     try {
-      logger.info(`Fetching ${limit} posts for @${username}`);
+      logger.info(`Fetching ${limit} posts for @${username} (excluding reels)`);
       await this.checkRateLimit();
 
       const profileUrl = `${this.baseURL}/api/v1/users/web_profile_info/?username=${username}`;
@@ -148,14 +148,26 @@ class InstagramService {
       }
 
       const user = response.data.data.user;
-      let posts = this.extractPostsFromProfile(user, limit);
+      let allItems = this.extractPostsFromProfile(user, limit);
 
       // If limit is 0 (get all) or more than 12, try to fetch additional posts
       if (limit === 0 || limit > 12) {
-        posts = await this.fetchAllPosts(username, user, posts);
+        allItems = await this.fetchAllPosts(username, user, allItems);
       }
 
-      // Upload all media to Cloudinary
+      // CRITICAL: Filter out reels from posts - only keep regular posts
+      logger.info(`Filtering reels from ${allItems.length} total items for @${username}`);
+      const posts = allItems.filter(item => {
+        const isReel = this.isReel(item);
+        if (isReel) {
+          logger.info(`Excluding reel ${item.shortcode} from posts table`);
+        }
+        return !isReel; // Only keep non-reels (regular posts)
+      });
+      
+      logger.info(`After filtering: ${posts.length} regular posts, ${allItems.length - posts.length} reels excluded`);
+
+      // Upload all media to Cloudinary (only for regular posts)
       logger.info(`Uploading ${posts.length} posts media to Cloudinary for @${username}`);
       for (const post of posts) {
         try {
@@ -185,12 +197,12 @@ class InstagramService {
         }
       }
 
-      // Build raw rows and persist
+      // Build raw rows and persist (only for regular posts)
       const rawRows = posts.map(p => ({
         username,
         content_id: p.instagram_post_id,
         content_url: p.shortcode ? `https://www.instagram.com/p/${p.shortcode}/` : null,
-        content_type: this.determineContentType(p),
+        content_type: 'post', // Always 'post' since we filtered out reels
         media_type: p.media_type,
         image_url: p.display_url || null,
         video_url: p.video_url || null,
@@ -203,12 +215,12 @@ class InstagramService {
         hashtags: p.hashtags || [],
         tagged_users: p.tagged_users || [],
         duration_seconds: p.duration || 0,
-        data_type: this.determineContentType(p),
+        data_type: 'post', // Always 'post' since we filtered out reels
         scraped_at: new Date()
       }));
 
       const savedRaw = await this.db.saveRawInstagramRows(rawRows);
-      logger.info(`Saved ${savedRaw.length} raw post rows for @${username} with Cloudinary URLs`);
+      logger.info(`Saved ${savedRaw.length} raw post rows (excluding reels) for @${username} with Cloudinary URLs`);
 
       return { posts, rawPostRows: savedRaw };
     } catch (error) {
@@ -236,20 +248,41 @@ class InstagramService {
 
       // profile
       const { profile, rawProfileRow } = await this.getUserProfile(username);
-      // posts + raw posts
+      
+      // Get ALL items first (before filtering) for reel extraction
+      logger.info(`Fetching all items for reel extraction from @${username}`);
+      await this.checkRateLimit();
+      const profileUrl = `${this.baseURL}/api/v1/users/web_profile_info/?username=${username}`;
+      const response = await this.makeRequest(profileUrl);
+      const user = response.data.data.user;
+      let allItems = this.extractPostsFromProfile(user, postLimit);
+      if (postLimit === 0 || postLimit > 12) {
+        allItems = await this.fetchAllPosts(username, user, allItems);
+      }
+      
+      // posts + raw posts (filtered to exclude reels)
       const { posts, rawPostRows } = await this.getUserPosts(username, postLimit);
 
-      // reels are posts that are video & duration > 0
-      logger.info(`Starting reel extraction from ${posts.length} posts`);
-      const reels = this.extractReelsFromPosts(posts);
-      logger.info(`Reel extraction completed: ${reels.length} reels found`);
+      // Extract reels from ALL items (not just filtered posts)
+      logger.info(`Starting reel extraction from ${allItems.length} total items`);
+      const reels = this.extractReelsFromPosts(allItems);
+      logger.info(`Primary reel extraction completed: ${reels.length} reels found`);
       
-      // If no reels were found, try a more aggressive approach
+      // If no reels were found, try a conservative fallback approach
       if (reels.length === 0) {
-        logger.warn('No reels found with primary detection, trying fallback method');
-        const fallbackReels = this.extractReelsFallback(posts);
+        logger.warn('No reels found with primary detection, trying conservative fallback method');
+        const fallbackReels = this.extractReelsFallback(allItems);
         logger.info(`Fallback method found ${fallbackReels.length} additional reels`);
         reels.push(...fallbackReels);
+      } else {
+        // Check if we missed any obvious reels with fallback method
+        const fallbackReels = this.extractReelsFallback(allItems);
+        const existingReelIds = new Set(reels.map(r => r.shortcode));
+        const newReels = fallbackReels.filter(r => !existingReelIds.has(r.shortcode));
+        if (newReels.length > 0) {
+          logger.info(`Fallback method found ${newReels.length} additional reels not caught by primary method`);
+          reels.push(...newReels);
+        }
       }
       
       // Upload reel media to Cloudinary with proper folder structure
@@ -293,15 +326,17 @@ class InstagramService {
       // Add API limitation warning to analytics
       analytics.api_limitations = {
         posts_available: posts.length,
+        reels_available: reels.length,
+        total_items_available: posts.length + reels.length,
         total_posts_reported: profile.profile.posts_count,
-        limitation_note: "Instagram's public API only provides the first 12 posts. For complete data, consider Instagram Graph API or third-party services."
+        limitation_note: "Instagram's public API only provides the first 12 items (posts + reels combined). For complete data, consider Instagram Graph API or third-party services."
       };
 
       // Save influencer (derived) optionally: we still return everything; controller or workers may create derived tables.
       // But we also return saved raw rows so caller can reference them.
-      logger.info(`Successfully fetched complete data for @${username}: ${posts.length} posts, ${reels.length} reels`);
-      logger.info(`Classification summary: ${posts.length - reels.length} regular posts, ${reels.length} reels`);
-      logger.warn(`API LIMITATION: Only ${posts.length} posts available out of ${profile.profile.posts_count} total posts`);
+      logger.info(`Successfully fetched complete data for @${username}: ${posts.length} regular posts, ${reels.length} reels`);
+      logger.info(`Classification summary: ${posts.length} regular posts, ${reels.length} reels (total: ${posts.length + reels.length} items from API)`);
+      logger.warn(`API LIMITATION: Only ${posts.length + reels.length} items available out of ${profile.profile.posts_count} total posts (${posts.length} posts + ${reels.length} reels)`);
 
       return {
         profile,
@@ -316,8 +351,10 @@ class InstagramService {
         data_version: '1.0',
         api_limitations: {
           posts_available: posts.length,
+          reels_available: reels.length,
+          total_items_available: posts.length + reels.length,
           total_posts_reported: profile.profile.posts_count,
-          limitation_note: "Instagram's public API only provides the first 12 posts. For complete data, consider Instagram Graph API or third-party services."
+          limitation_note: "Instagram's public API only provides the first 12 items (posts + reels combined). For complete data, consider Instagram Graph API or third-party services."
         }
       };
     } catch (error) {
@@ -456,7 +493,7 @@ class InstagramService {
   }
 
   /**
-   * Improved reel detection logic
+   * Improved reel detection logic with stricter criteria
    */
   isReel(post) {
     // First check if it's a video - reels are always videos
@@ -470,12 +507,12 @@ class InstagramService {
       views: post.views,
       likes: post.likes,
       comments: post.comments,
+      product_type: post.instagram_data?.product_type,
+      is_reel: post.instagram_data?.is_reel,
       caption_preview: (post.caption || '').substring(0, 50)
     });
     
-    // Multiple conditions to identify reels:
-    
-    // 1. Check for explicit reel indicators in the data
+    // PRIORITY 1: Check for explicit reel indicators in the data (most reliable)
     if (post.instagram_data?.product_type === 'clips' || 
         post.instagram_data?.product_type === 'reel' ||
         post.instagram_data?.is_reel === true) {
@@ -483,93 +520,94 @@ class InstagramService {
       return true;
     }
     
-    // 2. Check caption for reel indicators (case insensitive)
+    // PRIORITY 2: Check caption for explicit reel indicators (case insensitive)
     const caption = (post.caption || '').toLowerCase();
-    if (caption.includes('#reel') || 
-        caption.includes('#reels') || 
-        caption.includes('reel') ||
-        caption.includes('reels')) {
-      logger.info(`Post ${post.shortcode} identified as reel via caption`);
+    if (caption.includes('#reel') || caption.includes('#reels')) {
+      logger.info(`Post ${post.shortcode} identified as reel via explicit hashtag`);
       return true;
     }
     
-    // 3. Check duration - reels are typically 15-90 seconds
-    if (post.duration > 0 && post.duration <= 90) {
-      logger.info(`Post ${post.shortcode} identified as reel via duration (${post.duration}s)`);
+    // PRIORITY 3: Check for Instagram Reels URL pattern in shortcode
+    // Reels typically have specific shortcode patterns
+    if (post.shortcode && post.shortcode.length > 10) {
+      // Instagram reels often have longer shortcodes
+      logger.info(`Post ${post.shortcode} has longer shortcode, likely a reel`);
       return true;
     }
     
-    // 4. Check for vertical video aspect ratio (common for reels)
-    if (post.dimensions && post.dimensions.height > post.dimensions.width) {
-      const aspectRatio = post.dimensions.height / post.dimensions.width;
-      // Reels are typically vertical (9:16 aspect ratio or similar)
-      if (aspectRatio > 1.2) {
-        logger.info(`Post ${post.shortcode} identified as reel via aspect ratio (${aspectRatio})`);
-        return true;
-      }
-    }
-    
-    // 5. Check for short video with video_url (likely a reel)
-    if (post.video_url && post.duration <= 90) {
-      logger.info(`Post ${post.shortcode} identified as reel via video_url and duration`);
-      return true;
-    }
-    
-    // 6. Check for high engagement short videos (typical of reels)
+    // PRIORITY 4: Strict duration and aspect ratio check for reels
+    // Reels are typically 15-60 seconds and vertical (9:16 or similar)
     if (post.duration > 0 && post.duration <= 60) {
-      const totalEngagement = (post.likes || 0) + (post.comments || 0);
-      if (totalEngagement > 50) { // Lower threshold for better detection
-        logger.info(`Post ${post.shortcode} identified as reel via engagement (${totalEngagement})`);
+      if (post.dimensions && post.dimensions.height > post.dimensions.width) {
+        const aspectRatio = post.dimensions.height / post.dimensions.width;
+        // Reels are typically very vertical (aspect ratio > 1.5)
+        if (aspectRatio > 1.5) {
+          logger.info(`Post ${post.shortcode} identified as reel via duration (${post.duration}s) and aspect ratio (${aspectRatio})`);
+          return true;
+        }
+      }
+    }
+    
+    // PRIORITY 5: Check for views count with short duration (reels have views, posts don't)
+    if (post.views > 0 && post.duration > 0 && post.duration <= 90) {
+      // Only consider it a reel if it has significant views
+      if (post.views > 100) {
+        logger.info(`Post ${post.shortcode} identified as reel via views (${post.views}) and duration (${post.duration}s)`);
         return true;
       }
     }
     
-    // 7. Check for views count (reels often have views)
-    if (post.views > 0 && post.duration <= 90) {
-      logger.info(`Post ${post.shortcode} identified as reel via views (${post.views})`);
-      return true;
+    // PRIORITY 6: Check for very short videos (15-30 seconds) with vertical aspect ratio
+    if (post.duration > 0 && post.duration <= 30) {
+      if (post.dimensions && post.dimensions.height > post.dimensions.width) {
+        const aspectRatio = post.dimensions.height / post.dimensions.width;
+        if (aspectRatio > 1.3) {
+          logger.info(`Post ${post.shortcode} identified as reel via very short duration (${post.duration}s) and vertical aspect ratio (${aspectRatio})`);
+          return true;
+        }
+      }
     }
     
-    // 8. Default: if it's a short video without explicit indicators, assume it's a reel
-    if (post.duration > 0 && post.duration <= 90) {
-      logger.info(`Post ${post.shortcode} identified as reel via default rule (short video)`);
-      return true;
-    }
-    
-    logger.info(`Post ${post.shortcode} NOT identified as reel`);
+    // If none of the above conditions are met, it's likely a regular video post
+    logger.info(`Post ${post.shortcode} NOT identified as reel - treating as regular video post`);
     return false;
   }
 
   /**
-   * Fallback reel extraction method for cases where primary detection fails
+   * Conservative fallback reel extraction method for cases where primary detection fails
    */
   extractReelsFallback(posts) {
     try {
-      logger.info('Using fallback reel detection method');
+      logger.info('Using conservative fallback reel detection method');
       
       const fallbackReels = posts
         .filter(post => {
-          // More aggressive filtering for reels
+          // Only consider videos that weren't already classified as reels
           if (post.media_type !== 'video') return false;
           
-          // Any video with duration <= 90 seconds is likely a reel
-          if (post.duration > 0 && post.duration <= 90) {
-            logger.info(`Fallback: Identified ${post.shortcode} as reel (duration: ${post.duration}s)`);
+          // Very conservative approach: only consider videos with explicit reel indicators
+          const caption = (post.caption || '').toLowerCase();
+          
+          // Check for explicit reel hashtags
+          if (caption.includes('#reel') || caption.includes('#reels')) {
+            logger.info(`Fallback: Identified ${post.shortcode} as reel via hashtag`);
             return true;
           }
           
-          // Any video with vertical aspect ratio
-          if (post.dimensions && post.dimensions.height > post.dimensions.width) {
-            const aspectRatio = post.dimensions.height / post.dimensions.width;
-            if (aspectRatio > 1.1) { // Lower threshold
-              logger.info(`Fallback: Identified ${post.shortcode} as reel (aspect ratio: ${aspectRatio})`);
-              return true;
+          // Check for very short videos (15-30 seconds) with strong vertical aspect ratio
+          if (post.duration > 0 && post.duration <= 30) {
+            if (post.dimensions && post.dimensions.height > post.dimensions.width) {
+              const aspectRatio = post.dimensions.height / post.dimensions.width;
+              if (aspectRatio > 1.7) { // Very strict vertical requirement
+                logger.info(`Fallback: Identified ${post.shortcode} as reel (very short: ${post.duration}s, very vertical: ${aspectRatio})`);
+                return true;
+              }
             }
           }
           
-          // Any video with views (reels typically have views)
-          if (post.views > 0) {
-            logger.info(`Fallback: Identified ${post.shortcode} as reel (views: ${post.views})`);
+          // Check for videos with high views and short duration (reels characteristic)
+          if (post.views > 1000 && post.duration > 0 && post.duration <= 60) {
+            logger.info(`Fallback: Identified ${post.shortcode} as reel (high views: ${post.views}, short duration: ${post.duration}s)`);
             return true;
           }
           
@@ -594,7 +632,7 @@ class InstagramService {
           return reelData;
         });
       
-      logger.info(`Fallback method extracted ${fallbackReels.length} reels`);
+      logger.info(`Conservative fallback method extracted ${fallbackReels.length} additional reels`);
       return fallbackReels;
     } catch (error) {
       logger.error('Error in fallback reel extraction:', error);

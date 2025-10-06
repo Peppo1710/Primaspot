@@ -450,10 +450,10 @@ Get detailed likes vs comments analytics.
 }
 ```
 
-### Engagement Rate Analytics
+### Individual Engagement Rate Analytics
 **GET** `/api/analytics/engagement/:username`
 
-Get engagement rate analytics.
+Get individual engagement rate for each post and reel using the formula: `((Likes + Comments) / Followers) × 100`
 
 **Parameters:**
 - `username` (string, required): Instagram username (without @)
@@ -464,24 +464,49 @@ Get engagement rate analytics.
   "success": true,
   "message": "Engagement rate analytics for @example_user",
   "data": {
-    "engagement_rate": 5.5,
-    "followers_count": 1000,
-    "total_engagement": 8250,
-    "total_content": 75,
-    "posts_engagement": 5500,
-    "reels_engagement": 2750,
-    "posts_count": 50,
-    "reels_count": 25,
-    "engagement_per_content": 110,
-    "engagement_rate_percentage": 0.55
+    "posts": [
+      {
+        "post_id": "post_id_123",
+        "shortcode": "ABC123",
+        "likes_count": 150,
+        "comments_count": 25,
+        "total_engagement": 175,
+        "engagement_rate": 2.34
+      },
+      {
+        "post_id": "post_id_456",
+        "shortcode": "DEF456",
+        "likes_count": 200,
+        "comments_count": 30,
+        "total_engagement": 230,
+        "engagement_rate": 3.07
+      }
+    ],
+    "reels": [
+      {
+        "reel_id": "reel_id_789",
+        "shortcode": "GHI789",
+        "likes_count": 300,
+        "comments_count": 45,
+        "total_engagement": 345,
+        "engagement_rate": 4.61
+      }
+    ],
+    "followers_count": 7476
   }
 }
 ```
 
+**Special Notes:**
+- **Formula**: `((Likes + Comments) / Followers) × 100`
+- Returns individual engagement rates for each post and reel
+- Engagement rate is calculated as a percentage
+- Separates posts and reels into different arrays
+
 ### Content Analysis (AI-Powered)
 **GET** `/api/analytics/contentanalysis/content/:username`
 
-Get content analysis via Grok AI API.
+Get content analysis via Grok AI API. Returns only the AI analysis data.
 
 **Parameters:**
 - `username` (string, required): Instagram username (without @)
@@ -492,32 +517,27 @@ Get content analysis via Grok AI API.
   "success": true,
   "message": "Content analysis for @example_user",
   "data": {
-    "total_tags": 150,
-    "unique_tags": 45,
-    "all_tags": ["fashion", "lifestyle", "travel"],
-    "grok_analysis": {
-      "tags": [
-        {"tag": "lifestyle", "percentage": 35.2},
-        {"tag": "fashion", "percentage": 28.7},
-        {"tag": "travel", "percentage": 15.3},
-        {"tag": "miscellaneous", "percentage": 20.8}
-      ]
-    },
-    "posts_analyzed": 12,
-    "reels_analyzed": 8
+    "tags": [
+      {"tag": "lifestyle", "percentage": 35.2},
+      {"tag": "fashion", "percentage": 28.7},
+      {"tag": "travel", "percentage": 15.3},
+      {"tag": "food", "percentage": 12.1},
+      {"tag": "miscellaneous", "percentage": 8.7}
+    ]
   }
 }
 ```
 
 **Special Notes:**
 - Uses Grok AI API for intelligent content analysis
-- Returns JSON-formatted analysis
+- Returns **only** the Grok analysis data (no metadata)
+- Pure JSON response from AI analysis
 - No caching - always fresh analysis
 
 ### Vibe Analysis (AI-Powered)
 **GET** `/api/analytics/contentanalysis/vibe/:username`
 
-Get vibe analysis via Grok AI API.
+Get vibe analysis via Grok AI API. Returns only the AI analysis data.
 
 **Parameters:**
 - `username` (string, required): Instagram username (without @)
@@ -528,26 +548,20 @@ Get vibe analysis via Grok AI API.
   "success": true,
   "message": "Vibe analysis for @example_user",
   "data": {
-    "total_vibes": 20,
-    "unique_vibes": 14,
-    "all_vibes": ["energetic, aesthetic", "casual, daytime"],
-    "grok_analysis": {
-      "vibes": [
-        {"vibe": "energetic", "percentage": 40.0},
-        {"vibe": "casual", "percentage": 30.0},
-        {"vibe": "aesthetic", "percentage": 20.0},
-        {"vibe": "miscellaneous", "percentage": 10.0}
-      ]
-    },
-    "posts_analyzed": 12,
-    "reels_analyzed": 8
+    "vibes": [
+      {"vibe": "energetic", "percentage": 40.0},
+      {"vibe": "casual", "percentage": 30.0},
+      {"vibe": "aesthetic", "percentage": 20.0},
+      {"vibe": "professional", "percentage": 10.0}
+    ]
   }
 }
 ```
 
 **Special Notes:**
 - Uses Grok AI API for intelligent vibe analysis
-- Returns JSON-formatted analysis
+- Returns **only** the Grok analysis data (no metadata)
+- Pure JSON response from AI analysis
 - No caching - always fresh analysis
 
 ### Top Tags Analytics
@@ -580,7 +594,7 @@ Get top 10 tags by percentage (no AI/LLM).
 ### Performance PQ vs Engagement
 **GET** `/api/analytics/performance/pqvsengagement/:username`
 
-Get performance PQ vs engagement analytics.
+Get quality score (normalized) and engagement rate percentage for each post and reel.
 
 **Parameters:**
 - `username` (string, required): Instagram username (without @)
@@ -591,28 +605,40 @@ Get performance PQ vs engagement analytics.
   "success": true,
   "message": "Performance PQ vs engagement for @example_user",
   "data": {
-    "total_analyzed": 20,
-    "posts_analyzed": 12,
-    "reels_analyzed": 8,
-    "data": [
+    "posts": [
       {
         "type": "post",
         "id": "post_id_123",
+        "shortcode": "ABC123",
         "quality_score": 85,
-        "engagement": 110,
-        "engagement_rate": 1.1,
-        "likes": 100,
-        "comments": 10
+        "engagement_rate_percentage": 2.34
+      },
+      {
+        "type": "post",
+        "id": "post_id_456",
+        "shortcode": "DEF456",
+        "quality_score": 92,
+        "engagement_rate_percentage": 3.07
       }
     ],
-    "summary": {
-      "avg_quality_score": 82,
-      "avg_engagement_rate": 1.05,
-      "avg_engagement": 125
-    }
+    "reels": [
+      {
+        "type": "reel",
+        "id": "reel_id_789",
+        "shortcode": "GHI789",
+        "quality_score": 88,
+        "engagement_rate_percentage": 4.61
+      }
+    ]
   }
 }
 ```
+
+**Special Notes:**
+- **Quality Score**: Normalized using existing normalization logic (0-100 scale)
+- **Engagement Rate**: Calculated as `((Likes + Comments) / Followers) × 100`
+- Separates posts and reels into different arrays
+- Each item includes both quality score and engagement rate percentage
 
 ### Quality Indicators
 **GET** `/api/analytics/performance/quality/:username`
@@ -752,8 +778,28 @@ All endpoints return consistent error responses:
 - Content and vibe analysis use Grok AI API
 - Real-time analysis (no caching)
 - JSON-formatted responses
+- **Simplified responses**: AI endpoints return only the analysis data
 
 ### Data Storage
 - MongoDB for all data persistence
 - Automatic data scraping from Instagram
 - URL collection and storage
+
+### Analytics Improvements
+- **Fixed Engagement Rate Formula**: Now uses `((Likes + Comments) / Followers) × 100`
+- **Individual Post/Reel Analysis**: Each analytics endpoint returns data for individual posts and reels
+- **Simplified Responses**: Removed unnecessary metadata, returning only requested data
+- **Quality Score Normalization**: Maintains existing normalization logic for quality scores
+
+---
+
+## Updated Analytics Endpoints Summary
+
+| Endpoint | New Response Format | Key Changes |
+|----------|-------------------|-------------|
+| `/api/analytics/engagement/:username` | Individual post/reel ER arrays | Fixed formula, individual calculations |
+| `/api/analytics/contentanalysis/content/:username` | Pure Grok analysis | Removed metadata, AI-only response |
+| `/api/analytics/contentanalysis/vibe/:username` | Pure Grok analysis | Removed metadata, AI-only response |
+| `/api/analytics/performance/pqvsengagement/:username` | Quality score + ER arrays | Individual post/reel data, normalized scores |
+
+All analytics endpoints now provide more granular, accurate data with simplified response structures focused on the specific metrics requested.

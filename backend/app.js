@@ -17,7 +17,7 @@ const imageProxyRoutes = require('./src/routes/imageProxy');
 const analyticsRoutes = require('./src/routes/analyticsRoutes');
 
 const app = express();
-const port = process.env.PORT || 8001;
+const port = process.env.PORT || 8000;
 
 // Security middleware
 app.use(helmet({
@@ -80,20 +80,6 @@ app.get('/', (req, res) => {
   res.status(statusCode).json(health);
 });
 
-// API routes
-// app.get('/api', (req, res) => {
-//   res.json({
-//     success: true,
-//     message: 'Instagram Dashboard API',
-//     version: '1.0.0',
-//     endpoints: {
-//       users: '/api/users',
-//       user: '/api/user/:username',
-//       validate: '/api/user/validate/:username',
-//       health: '/health'
-//     }
-//   });
-// });
 
 // Mount user routes
 app.use('/api/user', userRoutes);
