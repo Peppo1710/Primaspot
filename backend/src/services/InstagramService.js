@@ -419,8 +419,8 @@ class InstagramService {
       }
       
       return {
-        instagram_post_id: node.id,
-        shortcode: node.shortcode,
+        instagram_post_id: node.id || `post_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        shortcode: node.shortcode || `code_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         media_type: mediaType,
         caption: node.edge_media_to_caption?.edges?.[0]?.node?.text || '',
         display_url: node.display_url,
@@ -747,8 +747,8 @@ class InstagramService {
   transformPostDataFromMedia(item) {
     try {
       return {
-        instagram_post_id: item.id,
-        shortcode: item.code,
+        instagram_post_id: item.id || `post_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        shortcode: item.code || `code_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         media_type: this.getMediaTypeFromItem(item),
         caption: item.caption?.text || '',
         display_url: item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url,

@@ -84,6 +84,14 @@ class DatabaseService {
       return user;
     } catch (error) {
       this.logger.error('Error in findUserByUsername:', error);
+      
+      // Handle specific MongoDB connection errors
+      if (error.name === 'MongooseServerSelectionError' || error.message.includes('ReplicaSetNoPrimary')) {
+        throw new ApiError(503, 'Database temporarily unavailable. Please try again later.');
+      } else if (error.name === 'MongooseTimeoutError') {
+        throw new ApiError(504, 'Database request timeout. Please try again.');
+      }
+      
       throw new ApiError(500, 'Database error while finding user');
     }
   }
@@ -896,6 +904,13 @@ Return format (strict JSON only):
 Output:`
       );
 
+      // Handle Groq API errors gracefully
+      if (grokAnalysis.error) {
+        this.logger.warn('Groq API error in content analysis:', grokAnalysis.error);
+        // Return fallback analysis based on raw data
+        return this.generateFallbackContentAnalysis(allTags);
+      }
+
       return grokAnalysis;
     } catch (error) {
       this.logger.error('Error in calculateContentAnalysis:', error);
@@ -950,6 +965,13 @@ Output:`
       const grokAnalysis = await this.callGrokAPI(
         `Analyze these vibe classifications and return ONLY a valid JSON object with the most common 8 vibes and their percentages. Format: {"vibes": [{"vibe": "name", "percentage": number}]}. Generalize similar vibes and put less important ones as "miscellaneous", do not even return things like what you did what were you thinking ,i just want pure json data. Vibes: ${allVibes.join(', ')}`
       );
+
+      // Handle Groq API errors gracefully
+      if (grokAnalysis.error) {
+        this.logger.warn('Groq API error in vibe analysis:', grokAnalysis.error);
+        // Return fallback analysis based on raw data
+        return this.generateFallbackVibeAnalysis(allVibes);
+      }
 
       return grokAnalysis;
     } catch (error) {
@@ -1168,6 +1190,70 @@ Output:`
     }
   }
 
+  generateFallbackContentAnalysis(allTags) {
+    try {
+      // Simple frequency analysis without AI
+      const tagCounts = {};
+      allTags.forEach(tag => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      });
+
+      const sortedTags = Object.entries(tagCounts)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 7)
+        .map(([tag, count]) => ({
+          tag,
+          percentage: Math.round((count / allTags.length) * 100 * 10) / 10
+        }));
+
+      // Add miscellaneous for remaining
+      const topPercentage = sortedTags.reduce((sum, item) => sum + item.percentage, 0);
+      if (topPercentage < 100) {
+        sortedTags.push({
+          tag: 'miscellaneous',
+          percentage: Math.round((100 - topPercentage) * 10) / 10
+        });
+      }
+
+      return { tags: sortedTags };
+    } catch (error) {
+      this.logger.error('Error in fallback content analysis:', error);
+      return { tags: [{ tag: 'miscellaneous', percentage: 100 }] };
+    }
+  }
+
+  generateFallbackVibeAnalysis(allVibes) {
+    try {
+      // Simple frequency analysis without AI
+      const vibeCounts = {};
+      allVibes.forEach(vibe => {
+        vibeCounts[vibe] = (vibeCounts[vibe] || 0) + 1;
+      });
+
+      const sortedVibes = Object.entries(vibeCounts)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 7)
+        .map(([vibe, count]) => ({
+          vibe,
+          percentage: Math.round((count / allVibes.length) * 100 * 10) / 10
+        }));
+
+      // Add miscellaneous for remaining
+      const topPercentage = sortedVibes.reduce((sum, item) => sum + item.percentage, 0);
+      if (topPercentage < 100) {
+        sortedVibes.push({
+          vibe: 'miscellaneous',
+          percentage: Math.round((100 - topPercentage) * 10) / 10
+        });
+      }
+
+      return { vibes: sortedVibes };
+    } catch (error) {
+      this.logger.error('Error in fallback vibe analysis:', error);
+      return { vibes: [{ vibe: 'miscellaneous', percentage: 100 }] };
+    }
+  }
+
   async callGrokAPI(prompt) {
     
     try {
@@ -1234,9 +1320,34 @@ Output:`
       
       this.logger.error('Error calling Groq API:', error);
       
+      // Handle rate limiting specifically
+      if (error.status === 429 || error.message.includes('rate_limit_exceeded')) {
+        const retryAfter = error.headers?.['retry-after'] || '8 minutes';
+        this.logger.warn(`Groq API rate limit exceeded. Retry after: ${retryAfter}`);
+        
+        const errorResult = {
+          error: 'Rate limit exceeded',
+          message: `Groq API rate limit reached. Please try again in ${retryAfter}.`,
+          retryAfter: retryAfter,
+          type: 'rate_limit'
+        };
+        return errorResult;
+      }
+      
+      // Handle other API errors
+      if (error.status === 500 || error.message.includes('Internal Server Error')) {
+        const errorResult = {
+          error: 'Groq API temporarily unavailable',
+          message: 'AI analysis service is temporarily down. Please try again later.',
+          type: 'service_unavailable'
+        };
+        return errorResult;
+      }
+      
       const errorResult = {
         error: 'Failed to get AI analysis',
-        message: error.message
+        message: error.message || 'Unknown error occurred',
+        type: 'api_error'
       };
       return errorResult;
     }

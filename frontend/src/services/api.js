@@ -49,7 +49,7 @@ apiClient.interceptors.response.use(
 export const api = {
   // Health check
   healthCheck: async () => {
-    const response = await apiClient.get('/status');
+    const response = await apiClient.get('/api/status');
     return response.data;
   },
 

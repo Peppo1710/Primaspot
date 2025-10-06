@@ -21,7 +21,18 @@ async function connect() {
     
     console.log(`🔗 Connecting to MongoDB: ${mongoUri.replace(/\/\/.*@/, '//***:***@')}`);
     
-    connection = await mongoose.connect(mongoUri);
+    // Add connection options for better reliability
+    const options = {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      bufferCommands: false,
+      bufferMaxEntries: 0,
+      retryWrites: true,
+      retryReads: true
+    };
+    
+    connection = await mongoose.connect(mongoUri, options);
 
     isConnected = true;
     state = 'authenticated';
@@ -31,7 +42,21 @@ async function connect() {
     isConnected = false;
     state = 'error';
     console.error('MongoDB connection error:', error.message);
-    console.error('💡 Make sure MongoDB is running and MONGODB_URI is set correctly');
+    
+    // Provide specific error messages for common issues
+    if (error.message.includes('ReplicaSetNoPrimary')) {
+      console.error('💡 MongoDB cluster has no primary node. This usually means:');
+      console.error('   - The cluster is starting up (wait a few minutes)');
+      console.error('   - Network connectivity issues');
+      console.error('   - Cluster configuration problems');
+    } else if (error.message.includes('authentication')) {
+      console.error('💡 Authentication failed. Check your MongoDB credentials.');
+    } else if (error.message.includes('timeout')) {
+      console.error('💡 Connection timeout. Check your network and MongoDB server status.');
+    } else {
+      console.error('💡 Make sure MongoDB is running and MONGODB_URI is set correctly');
+    }
+    
     throw error;
   }
 }
