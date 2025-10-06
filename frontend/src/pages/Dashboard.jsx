@@ -87,6 +87,14 @@ const Dashboard = () => {
       setLoading(true);
       
       try {
+        // Health check first
+        try {
+          const healthRes = await api.healthCheck();
+          console.log('Backend health check:', healthRes);
+        } catch (error) {
+          console.error('Backend health check failed:', error);
+        }
+
         const [
           profileRes, 
           postsRes, 
@@ -159,25 +167,33 @@ const Dashboard = () => {
         
         if (contentAnalysisRes.success && contentAnalysisRes.data) {
           // Content analysis returns {analysis: "stringified JSON"} structure
+          console.log('Raw content analysis response:', contentAnalysisRes);
           try {
             const parsedAnalysis = JSON.parse(contentAnalysisRes.data.analysis);
+            console.log('Parsed content analysis:', parsedAnalysis);
             // Filter out miscellaneous entries
             if (parsedAnalysis.tags) {
               parsedAnalysis.tags = parsedAnalysis.tags.filter(tag => 
                 tag.tag && tag.tag.toLowerCase() !== 'miscellaneous'
               );
+              console.log('Filtered tags:', parsedAnalysis.tags);
             }
             setContentAnalysis(parsedAnalysis);
           } catch (error) {
             console.error('Error parsing content analysis:', error);
+            console.log('Content analysis data structure:', contentAnalysisRes.data);
             setContentAnalysis(contentAnalysisRes.data);
           }
+        } else {
+          console.log('Content analysis failed or no data:', contentAnalysisRes);
         }
         
         if (vibeAnalysisRes.success && vibeAnalysisRes.data) {
           // Vibe analysis returns {analysis: "stringified JSON"} structure
+          console.log('Raw vibe analysis response:', vibeAnalysisRes);
           try {
             const parsedAnalysis = JSON.parse(vibeAnalysisRes.data.analysis);
+            console.log('Parsed vibe analysis:', parsedAnalysis);
             // Filter out miscellaneous and empty entries
             if (parsedAnalysis.vibes) {
               parsedAnalysis.vibes = parsedAnalysis.vibes.filter(vibe => 
@@ -186,12 +202,16 @@ const Dashboard = () => {
                 vibe.vibe.toLowerCase() !== 'empty' &&
                 vibe.percentage > 0
               );
+              console.log('Filtered vibes:', parsedAnalysis.vibes);
             }
             setVibeAnalysis(parsedAnalysis);
           } catch (error) {
             console.error('Error parsing vibe analysis:', error);
+            console.log('Vibe analysis data structure:', vibeAnalysisRes.data);
             setVibeAnalysis(vibeAnalysisRes.data);
           }
+        } else {
+          console.log('Vibe analysis failed or no data:', vibeAnalysisRes);
         }
         
         if (performanceDataRes.success && performanceDataRes.data) {
@@ -943,7 +963,9 @@ const Dashboard = () => {
                       </ResponsiveContainer>
                     ) : (
                       <div className="no-data">
-                        {contentAnalysis ? 'No content tags found' : 'Loading content analysis...'}
+                        {contentAnalysis ? `No content tags found (${contentAnalysis.tags ? contentAnalysis.tags.length : 0} tags)` : 'Loading content analysis...'}
+                        <br />
+                        <small>Debug: {JSON.stringify(contentAnalysis)}</small>
                       </div>
                     )}
                   </div>
@@ -979,7 +1001,9 @@ const Dashboard = () => {
                       </ResponsiveContainer>
                     ) : (
                       <div className="no-data">
-                        {vibeAnalysis ? 'No vibe data found' : 'Loading vibe analysis...'}
+                        {vibeAnalysis ? `No vibe data found (${vibeAnalysis.vibes ? vibeAnalysis.vibes.length : 0} vibes)` : 'Loading vibe analysis...'}
+                        <br />
+                        <small>Debug: {JSON.stringify(vibeAnalysis)}</small>
                       </div>
                     )}
                   </div>
@@ -1011,7 +1035,9 @@ const Dashboard = () => {
                       </ResponsiveContainer>
                     ) : (
                       <div className="no-data">
-                        {contentAnalysis ? 'No content tags found for bar chart' : 'Loading content tags...'}
+                        {contentAnalysis ? `No content tags found for bar chart (${contentAnalysis.tags ? contentAnalysis.tags.length : 0} tags)` : 'Loading content tags...'}
+                        <br />
+                        <small>Debug: {JSON.stringify(contentAnalysis)}</small>
                       </div>
                     )}
                   </div>

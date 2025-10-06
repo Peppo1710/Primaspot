@@ -47,6 +47,12 @@ apiClient.interceptors.response.use(
 );
 
 export const api = {
+  // Health check
+  healthCheck: async () => {
+    const response = await apiClient.get('/status');
+    return response.data;
+  },
+
   // Validate user (auto-scrapes if not in DB)
   validateUser: async (username) => {
     const response = await apiClient.get(`/user/validate/${username}`);

@@ -79,6 +79,21 @@ app.get('/', (req, res) => {
   const statusCode = dbStatus.isConnected ? 200 : 503;
   res.status(statusCode).json(health);
 });
+app.get('/api/status', (req, res) => {
+  const dbStatus = dbConnection.getStatus();
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV,
+    database: {
+      status: dbStatus.isConnected ? 'connected' : 'disconnected',
+      state: dbStatus.state
+    }
+  };
+  const statusCode = dbStatus.isConnected ? 200 : 503;
+  res.status(statusCode).json(health);
+});
 
 
 // Mount user routes
