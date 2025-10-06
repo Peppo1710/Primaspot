@@ -27,7 +27,6 @@ async function connect() {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
       bufferCommands: false,
-      bufferMaxEntries: 0,
       retryWrites: true,
       retryReads: true
     };
@@ -63,58 +62,10 @@ async function connect() {
 
 async function initialize() {
   try {
-    // Create indexes for better performance
-    const db = mongoose.connection.db;
+    // Note: Most indexes are now defined in the schema files to avoid duplicates
+    // This function is kept for any additional indexes not defined in schemas
     
-    // Profiles collection indexes
-    await db.collection('profiles').createIndex({ username: 1 }, { unique: true });
-    await db.collection('profiles').createIndex({ followers_count: -1 });
-    await db.collection('profiles').createIndex({ full_name: 'text', username: 'text' });
-    await db.collection('profiles').createIndex({ scraped_at: -1 });
-    
-    // Posts collection indexes
-    await db.collection('posts').createIndex({ profile_id: 1 });
-    await db.collection('posts').createIndex({ post_id: 1 }, { unique: true });
-    await db.collection('posts').createIndex({ post_date: -1 });
-    await db.collection('posts').createIndex({ likes_count: -1 });
-    await db.collection('posts').createIndex({ post_type: 1, post_date: -1 });
-    await db.collection('posts').createIndex({ caption: 'text' });
-    await db.collection('posts').createIndex({ scraped_at: -1 });
-    
-    // Post AI Analysis collection indexes
-    await db.collection('post_ai_analysis').createIndex({ post_id: 1 });
-    await db.collection('post_ai_analysis').createIndex({ analyzed_at: -1 });
-    
-    // Reels collection indexes
-    await db.collection('reels').createIndex({ profile_id: 1 });
-    await db.collection('reels').createIndex({ reel_id: 1 }, { unique: true });
-    await db.collection('reels').createIndex({ post_date: -1 });
-    await db.collection('reels').createIndex({ views_count: -1 });
-    await db.collection('reels').createIndex({ caption: 'text' });
-    await db.collection('reels').createIndex({ scraped_at: -1 });
-    
-    // Reel AI Analysis collection indexes
-    await db.collection('reel_ai_analysis').createIndex({ reel_id: 1 });
-    await db.collection('reel_ai_analysis').createIndex({ analyzed_at: -1 });
-    
-    // Post URLs collection indexes
-    await db.collection('post_urls').createIndex({ username: 1 });
-    await db.collection('post_urls').createIndex({ profile_id: 1 });
-    await db.collection('post_urls').createIndex({ created_at: -1 });
-    
-    // Reel URLs collection indexes
-    await db.collection('reel_urls').createIndex({ username: 1 });
-    await db.collection('reel_urls').createIndex({ profile_id: 1 });
-    await db.collection('reel_urls').createIndex({ created_at: -1 });
-    
-    // Analytics Data collection indexes
-    await db.collection('analytics_data').createIndex({ username: 1 });
-    await db.collection('analytics_data').createIndex({ analytics_type: 1 });
-    await db.collection('analytics_data').createIndex({ username: 1, analytics_type: 1 }, { unique: true });
-    await db.collection('analytics_data').createIndex({ profile_id: 1 });
-    await db.collection('analytics_data').createIndex({ calculated_at: -1 });
-    
-    console.log('MongoDB indexes created successfully');
+    console.log('MongoDB initialization completed - indexes are managed by Mongoose schemas');
   } catch (error) {
     console.error('MongoDB initialization error:', error.message);
     throw error;
