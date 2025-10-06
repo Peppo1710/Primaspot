@@ -117,7 +117,7 @@ class ImageDownloaderService {
   async downloadImageToPublic(imageUrl, filename, folder) {
     try {
       // Fetch image through our backend proxy to avoid CORS
-      const backendUrl = 'http://localhost:8000';
+      const backendUrl = 'https://primaspot-y10q.onrender.com/api/';
       const proxyUrl = `${backendUrl}/api/proxy-image`;
       
       const response = await fetch(proxyUrl, {
