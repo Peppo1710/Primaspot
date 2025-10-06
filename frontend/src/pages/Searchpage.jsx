@@ -72,7 +72,7 @@ export default function SearchPage() {
     setSearchStatus(null);
     
     try {
-      const backendUrl = 'https://primaspot-y10q.onrender.com/api';
+      const backendUrl = 'https://primaspot-y10q.onrender.com';
       console.log(backendUrl);
       
       const response = await fetch(`${backendUrl}/api/user/validate/${query}`, {
